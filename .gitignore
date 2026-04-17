@@ -12,3 +12,5 @@ models
 .pytest_cache
 .github
 *.bak
+
+.vscode/

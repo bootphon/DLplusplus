@@ -36,23 +36,25 @@ import polars as pl
 import torch
 
 from src.compat import patch_torchaudio
+
 patch_torchaudio()
 
-from segma.config import load_config
-from segma.config.base import Config
-from segma.inference import apply_model_on_audio
-from segma.models import Models
-from segma.utils.encoders import MultiLabelEncoder
+from segma.config import load_config  # noqa: E402
+from segma.config.base import Config  # noqa: E402
+from segma.inference import (  # noqa: E402
+    apply_model_on_audio,  # noqa: E402
+    apply_thresholds,
+    create_intervals,
+)
+from segma.models import Models  # noqa: E402
+from segma.utils.encoders import MultiLabelEncoder  # noqa: E402
 
-from segma.inference import apply_thresholds, create_intervals
-
-from src.core.intervals import intervals_to_segments
-from src.core.metadata import (
+from src.core.intervals import intervals_to_segments  # noqa: E402
+from src.core.metadata import (  # noqa: E402
     vtc_error_row,
     vtc_meta_row,
 )
-from src.utils import set_seeds
-from src.utils import (
+from src.utils import (  # noqa: E402
     add_sample_argument,
     atomic_write_parquet,
     get_dataset_paths,
@@ -62,6 +64,7 @@ from src.utils import (
     log_benchmark,
     merge_segments_df,
     sample_manifest,
+    set_seeds,  # noqa: E402
     shard_list,
 )
 
@@ -90,9 +93,11 @@ def _apply_threshold(
         thresholded = apply_thresholds(logits_t, thresh_dict, "cpu").detach()
         intervals = create_intervals(thresholded, conv_settings, l_encoder)
         for start_f, end_f, label in intervals:
-            all_intervals.append(
-                (start_f + region_start_f, end_f + region_start_f, label)
-            )
+            all_intervals.append((
+                start_f + region_start_f,
+                end_f + region_start_f,
+                label,
+            ))
     return all_intervals
 
 
@@ -120,10 +125,13 @@ def main(
     # Auto-detect batch size from GPU VRAM when batch_size <= 0
     if batch_size <= 0:
         from src.pipeline.resources import query_local_gpu, recommend_vtc_batch_size
+
         local_gpu = query_local_gpu()
         if local_gpu is not None:
             batch_size = recommend_vtc_batch_size(local_gpu.vram_gb)
-            logger.info(f"Auto batch_size={batch_size} for {local_gpu.name} ({local_gpu.vram_gb} GB)")
+            logger.info(
+                f"Auto batch_size={batch_size} for {local_gpu.name} ({local_gpu.vram_gb} GB)"
+            )
         else:
             batch_size = 128
             logger.info(f"No GPU detected — using default batch_size={batch_size}")
@@ -148,7 +156,7 @@ def main(
 
     if array_id is not None and array_count is not None:
         file_ids = shard_list(file_ids, array_id, array_count)
-        logger.info(f"Shard {array_id}/{array_count - 1}: " f"{len(file_ids)} files")
+        logger.info(f"Shard {array_id}/{array_count - 1}: {len(file_ids)} files")
 
     shard_id = array_id if array_id is not None else 0
 
@@ -161,7 +169,9 @@ def main(
     completed_uids: set[str] = set()
 
     # Check all shard metas so a manifest reorder doesn't re-process
-    completed_uids = load_completed_ids(meta_dir, id_column="uid", pattern="shard_*.parquet")
+    completed_uids = load_completed_ids(
+        meta_dir, id_column="uid", pattern="shard_*.parquet"
+    )
 
     if meta_path.exists():
         prev_meta_df = pl.read_parquet(meta_path)
@@ -169,7 +179,7 @@ def main(
     remaining = [uid for uid in file_ids if uid not in completed_uids]
     if len(remaining) < len(file_ids):
         skipped = len(file_ids) - len(remaining)
-        logger.info(f"Resume: {skipped} done, " f"{len(remaining)} remaining")
+        logger.info(f"Resume: {skipped} done, {len(remaining)} remaining")
     file_ids_to_process = remaining
 
     if not file_ids_to_process and not file_ids:
@@ -223,7 +233,7 @@ def main(
     total_bytes = sum(file_sizes.values()) or 1
     bytes_done = 0
     print(
-        f"Shard {shard_id}: {total} files, " f"{total_bytes / 1e9:.1f} GB",
+        f"Shard {shard_id}: {total} files, {total_bytes / 1e9:.1f} GB",
         flush=True,
     )
 
@@ -283,9 +293,7 @@ def main(
         # --- Convert to segments ---
         file_segs = intervals_to_segments(intervals, uid)
         seg_rows.extend(file_segs)
-        meta_rows.append(
-            vtc_meta_row(uid, threshold, file_segs, max_sig, mean_sig)
-        )
+        meta_rows.append(vtc_meta_row(uid, threshold, file_segs, max_sig, mean_sig))
 
         bytes_done += file_sizes.get(uid, 0)
         now = time.time()
@@ -294,15 +302,15 @@ def main(
         remaining_bytes = total_bytes - bytes_done
         remaining_s = remaining_bytes / rate if rate > 0 else 0
         eta = (
-            f"{remaining_s/60:.0f}m"
+            f"{remaining_s / 60:.0f}m"
             if remaining_s < 3600
-            else f"{remaining_s/3600:.1f}h"
+            else f"{remaining_s / 3600:.1f}h"
         )
         pct = 100.0 * bytes_done / total_bytes
         if i % log_every == 0 or i == total or (now - last_log_t) >= log_interval_s:
             print(
                 f"  VTC  {i:>4}/{total}"
-                f"  {bytes_done/1e9:.1f}/{total_bytes/1e9:.1f} GB"
+                f"  {bytes_done / 1e9:.1f}/{total_bytes / 1e9:.1f} GB"
                 f" ({pct:.0f}%)  ETA {eta}",
                 flush=True,
             )
@@ -396,7 +404,7 @@ def main(
     logger.info(f"Shard {shard_id} complete")
     logger.info(f"  Files     : {processed}/{total}  ({n_errors} errors)")
     logger.info(f"  Threshold : {threshold}")
-    logger.info(f"  Segments  : {len(seg_df):,} raw, " f"{len(merged_df):,} merged")
+    logger.info(f"  Segments  : {len(seg_df):,} raw, {len(merged_df):,} merged")
     logger.info(f"  Wall time : {hhmmss(wall)}")
     logger.info(f"{'─' * 50}")
 
@@ -435,12 +443,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--config",
-        default="VTC-2.0/model/config.yml",
+        default=Path.home() / ".cache/vtc/config.yml",
         help="segma model config (default: VTC-2.0/model/config.yml)",
     )
     parser.add_argument(
         "--checkpoint",
-        default="VTC-2.0/model/best.ckpt",
+        default=Path.home() / ".cache/vtc/best.ckpt",
         help="segma model checkpoint (default: VTC-2.0/model/best.ckpt)",
     )
     parser.add_argument(
