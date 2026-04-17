@@ -17,22 +17,21 @@ A feature processing and data loading framework for child-centered long-form aud
 
 ## 1. Installation
 
-**Requirements:** Linux or macOS, Python ≥ 3.13, [uv](https://docs.astral.sh/uv/), [ffmpeg](https://ffmpeg.org/), [git-lfs](https://git-lfs.com/).
+**Requirements:** Linux or macOS, Python ≥ 3.13, [uv](https://docs.astral.sh/uv/), [ffmpeg](https://ffmpeg.org/).
 
 ```bash
 # Check system dependencies:
 ./check_sys_dependencies.sh
 
 # Clone (includes model weights via git-lfs):
-git lfs install
-git clone --recurse-submodules https://github.com/LAAC-LSCP/DLplusplus.git
+git clone https://github.com/bootphon/DLplusplus.git
 cd DLplusplus
 
 # Install Python dependencies:
 uv sync
 
-# Download the Brouhaha SNR model checkpoint (~47 MB, one-time):
-uv run python scripts/download_brouhaha.py
+# Download the Brouhaha SNR & VTC2.0 checkpoints:
+uv run python scripts/download_models.py
 ```
 
 <details>

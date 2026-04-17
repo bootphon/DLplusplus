@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import sys
 import warnings
 from pathlib import Path
@@ -16,8 +17,13 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Default Brouhaha checkpoint (shipped with the repo)
-DEFAULT_MODEL = "models/best/checkpoints/best.ckpt"
+# Default Brouhaha checkpoint (downloaded using scripts/download_models.py)
+MODEL_ROOT = Path(
+    os.environ["MODEL_ROOT"]
+    if "MODEL_ROOT" in os.environ
+    else Path.home() / ".cache/dlpluplus"
+)
+DEFAULT_MODEL = MODEL_ROOT / "brouhaha/best.ckpt"
 
 
 def ensure_model(model_path: str) -> str:
@@ -33,11 +39,6 @@ def ensure_model(model_path: str) -> str:
 
     if model_path != DEFAULT_MODEL:
         raise FileNotFoundError(f"Brouhaha checkpoint not found: {model_path}")
-
-    logger.info("Brouhaha checkpoint not found — downloading from Hugging Face …")
-    from scripts.download_brouhaha import ensure_brouhaha_checkpoint
-
-    ensure_brouhaha_checkpoint(p)
     return model_path
 
 
@@ -51,8 +52,8 @@ def load_brouhaha_pipeline(model_path: str, device: str = "cuda"):
     Call :func:`ensure_model` before this to auto-download if needed.
     """
     import torch
-    from pyannote.audio import Model
     from brouhaha.pipeline import RegressiveActivityDetectionPipeline
+    from pyannote.audio import Model
 
     for _mod in (
         "speechbrain",

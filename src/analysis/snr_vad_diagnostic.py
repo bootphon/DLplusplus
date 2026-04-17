@@ -17,6 +17,7 @@ Usage (must run on GPU node):
 import argparse
 import io
 import logging
+import os
 import sys
 import time
 import warnings
@@ -25,8 +26,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from src.utils import set_seeds
-from src.utils import get_dataset_paths, load_manifest
+from src.utils import get_dataset_paths, load_manifest, set_seeds
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,13 +36,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger("snr_diag")
 
-_DEFAULT_MODEL = "models/best/checkpoints/best.ckpt"
+_MODEL_ROOT = Path(
+    os.environ["MODEL_ROOT"]
+    if "MODEL_ROOT" in os.environ
+    else Path.home() / ".cache/dlpluplus"
+)
+_DEFAULT_MODEL = _MODEL_ROOT / "brouhaha/best.ckpt"
 _VAD_THRESHOLDS = [0.5, 0.6, 0.7, 0.8, 0.9]
 
 
 def _load_model(model_path: str, device: str):
     """Load Brouhaha model and pipeline, suppressing noisy logs."""
     import torch
+
     from src.compat import patch_torchaudio
 
     patch_torchaudio()
@@ -56,8 +62,8 @@ def _load_model(model_path: str, device: str):
     ):
         logging.getLogger(_mod).setLevel(logging.WARNING)
 
-    from pyannote.audio import Model
     from brouhaha.pipeline import RegressiveActivityDetectionPipeline
+    from pyannote.audio import Model
 
     _real_stdout = sys.stdout
     sys.stdout = io.StringIO()
@@ -129,7 +135,7 @@ def main(dataset: str, device: str = "cuda"):
 
     for i, uid in enumerate(file_ids):
         audio_path = Path(uid_to_path[uid])
-        logger.info(f"[{i+1}/{len(file_ids)}] {uid}")
+        logger.info(f"[{i + 1}/{len(file_ids)}] {uid}")
         t0 = time.time()
 
         vad_prob, snr, c50, step_s = _run_brouhaha(pipeline, audio_path)
@@ -137,7 +143,7 @@ def main(dataset: str, device: str = "cuda"):
         duration_s = n_frames * step_s
 
         logger.info(
-            f"  {n_frames:,} frames, {duration_s/3600:.1f}h, step={step_s*1000:.1f}ms"
+            f"  {n_frames:,} frames, {duration_s / 3600:.1f}h, step={step_s * 1000:.1f}ms"
         )
 
         # All-frame stats (what we currently compute)

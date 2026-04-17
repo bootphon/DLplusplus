@@ -456,15 +456,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dacite"
-version = "1.9.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/55/a0/7ca79796e799a3e782045d29bf052b5cde7439a2bbb17f15ff44f7aacc63/dacite-1.9.2.tar.gz", hash = "sha256:6ccc3b299727c7aa17582f0021f6ae14d5de47c7227932c47fec4cdfefd26f09", size = 22420, upload-time = "2025-02-05T09:27:29.757Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/94/35/386550fd60316d1e37eccdda609b074113298f23cef5bddb2049823fe666/dacite-1.9.2-py3-none-any.whl", hash = "sha256:053f7c3f5128ca2e9aceb66892b1a3c8936d02c686e707bee96e19deef4bc4a0", size = 16600, upload-time = "2025-02-05T09:27:24.345Z" },
-]
-
-[[package]]
 name = "decorator"
 version = "5.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -509,7 +500,7 @@ requires-dist = [
     { name = "panns-inference", specifier = ">=0.1.1" },
     { name = "polars", specifier = ">=1.0" },
     { name = "pyarrow", specifier = ">=23.0.1" },
-    { name = "segma", git = "https://github.com/arxaqapi/segma?rev=ea8a54be363ef3ce15e00a7252eb637dcfaac495" },
+    { name = "segma", git = "https://github.com/arxaqapi/segma?rev=9c398231011a7b16b76cf7be8e99c8b4dbc7ac35" },
     { name = "soundfile", specifier = ">=0.13" },
     { name = "ten-vad", specifier = ">=1.0.6.8" },
     { name = "webdataset", specifier = ">=1.0.2" },
@@ -2244,18 +2235,16 @@ wheels = [
 [[package]]
 name = "segma"
 version = "0.1.0"
-source = { git = "https://github.com/arxaqapi/segma?rev=ea8a54be363ef3ce15e00a7252eb637dcfaac495#ea8a54be363ef3ce15e00a7252eb637dcfaac495" }
+source = { git = "https://github.com/arxaqapi/segma?rev=9c398231011a7b16b76cf7be8e99c8b4dbc7ac35#9c398231011a7b16b76cf7be8e99c8b4dbc7ac35" }
 dependencies = [
-    { name = "dacite" },
     { name = "interlap" },
     { name = "lightning" },
     { name = "matplotlib" },
     { name = "numpy" },
-    { name = "omegaconf" },
-    { name = "optuna" },
     { name = "polars" },
-    { name = "pyyaml" },
+    { name = "scikit-learn" },
     { name = "scipy" },
+    { name = "tomlkit" },
     { name = "torch" },
     { name = "torchaudio" },
     { name = "torchcodec" },
@@ -2562,6 +2551,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/36/65/7e75caea90bc73c1dd8d40438adf1a7bc26af3b8d0a6705ea190462506e1/tokenizers-0.22.1-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:a0f307d490295717726598ef6fa4f24af9d484809223bbc253b201c740a06390", size = 9681250, upload-time = "2025-09-19T09:49:21.501Z" },
     { url = "https://files.pythonhosted.org/packages/30/2c/959dddef581b46e6209da82df3b78471e96260e2bc463f89d23b1bf0e52a/tokenizers-0.22.1-cp39-abi3-win32.whl", hash = "sha256:b5120eed1442765cd90b903bb6cfef781fd8fe64e34ccaecbae4c619b7b12a82", size = 2472003, upload-time = "2025-09-19T09:49:27.089Z" },
     { url = "https://files.pythonhosted.org/packages/b3/46/e33a8c93907b631a99377ef4c5f817ab453d0b34f93529421f42ff559671/tokenizers-0.22.1-cp39-abi3-win_amd64.whl", hash = "sha256:65fd6e3fb11ca1e78a6a93602490f134d1fdeb13bcef99389d5102ea318ed138", size = 2674684, upload-time = "2025-09-19T09:49:24.953Z" },
+]
+
+[[package]]
+name = "tomlkit"
+version = "0.14.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/af/14b24e41977adb296d6bd1fb59402cf7d60ce364f90c890bd2ec65c43b5a/tomlkit-0.14.0.tar.gz", hash = "sha256:cf00efca415dbd57575befb1f6634c4f42d2d87dbba376128adb42c121b87064", size = 187167, upload-time = "2026-01-13T01:14:53.304Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b5/11/87d6d29fb5d237229d67973a6c9e06e048f01cf4994dee194ab0ea841814/tomlkit-0.14.0-py3-none-any.whl", hash = "sha256:592064ed85b40fa213469f81ac584f67a4f2992509a7c3ea2d632208623a3680", size = 39310, upload-time = "2026-01-13T01:14:51.965Z" },
 ]
 
 [[package]]

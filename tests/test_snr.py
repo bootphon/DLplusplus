@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import os
 import pytest
 
 from src.pipeline.snr import pool_snr
@@ -106,7 +107,12 @@ class TestPoolSnr:
 # Brouhaha model tests — need GPU / compute node
 # ======================================================================
 
-_BROUHAHA_MODEL = Path("models/best/checkpoints/best.ckpt")
+_MODEL_ROOT = Path(
+    os.environ["MODEL_ROOT"]
+    if "MODEL_ROOT" in os.environ
+    else Path.home() / ".cache/dlpluplus"
+)
+_BROUHAHA_MODEL = _MODEL_ROOT / "brouhaha/best.ckpt
 
 
 def _brouhaha_model_available() -> bool:

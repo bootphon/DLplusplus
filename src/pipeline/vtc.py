@@ -427,6 +427,11 @@ def main(
 
 
 if __name__ == "__main__":
+    MODEL_ROOT = Path(
+        os.environ["MODEL_ROOT"]
+        if "MODEL_ROOT" in os.environ
+        else Path.home() / ".cache/dlpluplus"
+    )
     parser = argparse.ArgumentParser(
         description="VTC inference with fixed per-file thresholding.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -443,13 +448,13 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--config",
-        default=Path.home() / ".cache/vtc/config.yml",
-        help="segma model config (default: VTC-2.0/model/config.yml)",
+        default=MODEL_ROOT / "vtc/model/config.yml",
+        help=f"segma model config (default: {MODEL_ROOT / 'vtc/model/config.yml'})",
     )
     parser.add_argument(
         "--checkpoint",
-        default=Path.home() / ".cache/vtc/best.ckpt",
-        help="segma model checkpoint (default: VTC-2.0/model/best.ckpt)",
+        default=MODEL_ROOT / "vtc/model/best.ckpt",
+        help=f"segma model checkpoint (default: {MODEL_ROOT / 'vtc/model/best.ckpt'})",
     )
     parser.add_argument(
         "--threshold",
