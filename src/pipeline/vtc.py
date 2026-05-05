@@ -30,23 +30,26 @@ import os
 import sys
 import time
 from pathlib import Path
+from pprint import pformat
 from typing import Literal
 
 import polars as pl
+import tomlkit
 import torch
 
 from src.compat import patch_torchaudio
 
 patch_torchaudio()
 
-from segma.config import load_config  # noqa: E402
-from segma.config.base import Config  # noqa: E402
+from segma.config import Config, load_config  # noqa: E402
 from segma.inference import (  # noqa: E402
     apply_model_on_audio,  # noqa: E402
     apply_thresholds,
     create_intervals,
 )
-from segma.models import Models  # noqa: E402
+from segma.models import VTC2  # noqa: E402
+from segma.models.base import ConvolutionSettings  # noqa: E402
+from segma.models.multilabel import MultiLabelModel  # noqa: E402
 from segma.utils.encoders import MultiLabelEncoder  # noqa: E402
 
 from src.core.intervals import intervals_to_segments  # noqa: E402
@@ -77,27 +80,34 @@ logging.basicConfig(
 logger = logging.getLogger("vtc")
 
 
+def load_thresholds(thresholds_path: Path) -> dict:
+    """Load thresholds from toml file."""
+    if not thresholds_path.exists():
+        raise FileNotFoundError(
+            f"Thresholds file not found, expected @ {thresholds_path}"
+        )
+    return tomlkit.loads(thresholds_path.read_text())
+
+
 def _apply_threshold(
     region_data: list[tuple[int, torch.Tensor]],
-    threshold: float,
+    thresholds: dict,
     conv_settings,
     l_encoder,
 ) -> list[tuple[int, int, str]]:
     """Apply a fixed sigmoid threshold and return file-absolute intervals."""
-    thresh_dict = {
-        label: {"lower_bound": threshold, "upper_bound": 1.0}
-        for label in l_encoder.labels
-    }
     all_intervals: list[tuple[int, int, str]] = []
     for region_start_f, logits_t in region_data:
-        thresholded = apply_thresholds(logits_t, thresh_dict, "cpu").detach()
+        thresholded = apply_thresholds(logits_t, thresholds, "cpu").detach()
         intervals = create_intervals(thresholded, conv_settings, l_encoder)
         for start_f, end_f, label in intervals:
-            all_intervals.append((
-                start_f + region_start_f,
-                end_f + region_start_f,
-                label,
-            ))
+            all_intervals.append(
+                (
+                    start_f + region_start_f,
+                    end_f + region_start_f,
+                    label,
+                )
+            )
     return all_intervals
 
 
@@ -110,7 +120,7 @@ def main(
     dataset: str,
     config: str = "VTC-2.0/model/config.yml",
     checkpoint: str = "VTC-2.0/model/best.ckpt",
-    threshold: float = 0.5,
+    thresholds_path: str = "VTC-2.0/thresholds/f1.toml",
     min_duration_on_s: float = 0.1,
     min_duration_off_s: float = 0.3,
     batch_size: int = 0,
@@ -136,11 +146,13 @@ def main(
             batch_size = 128
             logger.info(f"No GPU detected — using default batch_size={batch_size}")
 
+    thresholds_dict = load_thresholds(thresholds_path=Path(thresholds_path))
+    threshold_label = Path(thresholds_path).stem  # "f1" or "hp"
     paths = get_dataset_paths(dataset)
     logger.info(f"Dataset: {dataset}")
     logger.info(f"  manifest  : {paths.manifest}")
     logger.info(f"  output    : {paths.output}")
-    logger.info(f"  threshold : {threshold}")
+    logger.info(f"  thresholds : {pformat(thresholds_dict)}")
     logger.info(f"  batch_size: {batch_size}")
 
     # --------------------------------------------------------------
@@ -190,18 +202,20 @@ def main(
     # Load model
     # --------------------------------------------------------------
     logger.info(f"Model: {Path(config).stem}")
-    model_config: Config = load_config(config)
-    l_encoder = MultiLabelEncoder(labels=model_config.data.classes)
-    model = Models[model_config.model.name].load_from_checkpoint(
-        checkpoint_path=checkpoint,
-        label_encoder=l_encoder,
-        config=model_config,
-        train=False,
-    )
-    model.eval()
-    model.to(torch.device(device))
+    model_config: Config = load_config(Path(config))
 
-    conv_settings = model.conv_settings
+    l_encoder = MultiLabelEncoder(labels=model_config.data.labels)
+
+    model = MultiLabelModel(
+        VTC2(label_encoder=l_encoder, config=model_config.model),
+        train_config=model_config.train,
+    )
+    state = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    model.load_state_dict(state["state_dict"])
+    model.eval()
+    model.to(torch.device(device))  # pyright: ignore[reportPrivateImportUsage]
+
+    conv_settings = ConvolutionSettings(kernels=(320,), strides=(320,), paddings=(0,))
     chunk_duration_s = model_config.audio.chunk_duration_s
 
     # --------------------------------------------------------------
@@ -263,7 +277,7 @@ def main(
 
         # --- Optional logit save ---
         if save_logits:
-            all_logits = torch.cat([lg for _, lg in region_data_cpu], dim=0)
+            all_logits = torch.cat([lg for _, lg in region_data_cpu], dim=0)  # pyright: ignore[reportPrivateImportUsage]
             torch.save(
                 {
                     l_encoder.inv_transform(j): all_logits[:, j]
@@ -274,7 +288,7 @@ def main(
 
         # --- Sigmoid summary ---
         if region_data_cpu:
-            all_logits_cpu = torch.cat([lg for _, lg in region_data_cpu], dim=0)
+            all_logits_cpu = torch.cat([lg for _, lg in region_data_cpu], dim=0)  # pyright: ignore[reportPrivateImportUsage]
             probs = all_logits_cpu.sigmoid()
             max_sig = round(float(probs.max().item()), 4)
             mean_sig = round(float(probs.mean().item()), 4)
@@ -285,7 +299,7 @@ def main(
         # --- Apply threshold ---
         intervals = _apply_threshold(
             region_data_cpu,
-            threshold,
+            thresholds_dict,
             conv_settings,
             l_encoder,
         )
@@ -293,7 +307,9 @@ def main(
         # --- Convert to segments ---
         file_segs = intervals_to_segments(intervals, uid)
         seg_rows.extend(file_segs)
-        meta_rows.append(vtc_meta_row(uid, threshold, file_segs, max_sig, mean_sig))
+        meta_rows.append(
+            vtc_meta_row(uid, threshold_label, file_segs, max_sig, mean_sig)
+        )
 
         bytes_done += file_sizes.get(uid, 0)
         now = time.time()
@@ -403,7 +419,7 @@ def main(
     logger.info(f"{'─' * 50}")
     logger.info(f"Shard {shard_id} complete")
     logger.info(f"  Files     : {processed}/{total}  ({n_errors} errors)")
-    logger.info(f"  Threshold : {threshold}")
+    logger.info(f"  Threshold : {pformat(thresholds_dict)}")
     logger.info(f"  Segments  : {len(seg_df):,} raw, {len(merged_df):,} merged")
     logger.info(f"  Wall time : {hhmmss(wall)}")
     logger.info(f"{'─' * 50}")
@@ -430,7 +446,7 @@ if __name__ == "__main__":
     MODEL_ROOT = Path(
         os.environ["MODEL_ROOT"]
         if "MODEL_ROOT" in os.environ
-        else Path.home() / ".cache/dlpluplus"
+        else Path.home() / ".cache/dlplusplus"
     )
     parser = argparse.ArgumentParser(
         description="VTC inference with fixed per-file thresholding.",
@@ -457,10 +473,9 @@ if __name__ == "__main__":
         help=f"segma model checkpoint (default: {MODEL_ROOT / 'vtc/model/best.ckpt'})",
     )
     parser.add_argument(
-        "--threshold",
-        type=float,
-        default=0.5,
-        help="Sigmoid threshold for VTC classification (default: 0.5)",
+        "--threshold_path",
+        default=MODEL_ROOT / "thresholds/f1.toml",
+        help="Sigmoid threshold for VTC classification (default: f1)",
     )
     parser.add_argument(
         "--min_duration_on_s",
