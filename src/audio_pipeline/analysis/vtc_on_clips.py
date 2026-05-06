@@ -40,11 +40,13 @@ patch_torchaudio()
 
 from segma.config import load_config  # noqa: E402
 from segma.inference import apply_model_on_audio  # noqa: E402
-from segma.models import Models
+from segma.models import VTC2  # noqa: E402
+from segma.models.base import ConvolutionSettings  # noqa: E402
+from segma.models.multilabel import MultiLabelModel  # noqa: E402
 from segma.utils.encoders import MultiLabelEncoder  # noqa: E402
 
 from audio_pipeline.core.intervals import intervals_to_segments  # noqa: E402
-from audio_pipeline.pipeline.vtc import _apply_threshold  # noqa: E402
+from audio_pipeline.pipeline.vtc import _apply_threshold, load_thresholds  # noqa: E402
 from audio_pipeline.utils import (  # noqa: E402
     atomic_write_parquet,
     get_dataset_paths,
@@ -73,9 +75,9 @@ _EMPTY_SCHEMA = {
 
 def main(
     dataset: str,
-    config: str = "VTC-2.0/model/config.yml",
+    config: str = "VTC-2.0/model/config.toml",
     checkpoint: str = "VTC-2.0/model/best.ckpt",
-    threshold: float = 0.5,
+    thresholds_path: str = "VTC-2.0/thresholds/f1.toml",
     min_duration_on_s: float = 0.1,
     min_duration_off_s: float = 0.3,
     batch_size: int = 128,
@@ -92,9 +94,10 @@ def main(
     out_dir = paths.output / "vtc_clips"
     shard_id = array_id if array_id is not None else 0
 
-    logger.info(f"Dataset : {dataset}")
-    logger.info(f"Shards  : {shard_dir}")
-    logger.info(f"Output  : {out_dir}")
+    logger.info(f"Dataset     : {dataset}")
+    logger.info(f"Shards      : {shard_dir}")
+    logger.info(f"Output      : {out_dir}")
+    logger.info(f"Thresholds  : {thresholds_path}")
 
     # ------------------------------------------------------------------
     # Find tar files and assign this worker's subset
@@ -125,20 +128,29 @@ def main(
             logger.info(f"Resume: {len(completed_clip_ids)} clips already done")
 
     # ------------------------------------------------------------------
+    # Load thresholds
+    # ------------------------------------------------------------------
+    thresholds_dict = load_thresholds(Path(thresholds_path))
+    logger.info(f"Thresholds  : {thresholds_dict}")
+
+    # ------------------------------------------------------------------
     # Load model
     # ------------------------------------------------------------------
     logger.info(f"Loading model: {Path(config).stem}")
-    model_config = load_config(config)
-    l_encoder = MultiLabelEncoder(labels=model_config.data.classes)
-    model = Models[model_config.model.name].load_from_checkpoint(
-        checkpoint_path=checkpoint,
-        label_encoder=l_encoder,
-        config=model_config,
-        train=False,
+    model_config = load_config(Path(config))
+
+    l_encoder = MultiLabelEncoder(labels=model_config.data.labels)
+
+    model = MultiLabelModel(
+        VTC2(label_encoder=l_encoder, config=model_config.model),
+        train_config=model_config.train,
     )
+    state = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    model.load_state_dict(state["state_dict"])
     model.eval()
-    model.to(torch.device(device))
-    conv_settings = model.conv_settings
+    model.to(torch.device(device))  # pyright: ignore[reportPrivateImportUsage]
+
+    conv_settings = ConvolutionSettings(kernels=(320,), strides=(320,), paddings=(0,))
     chunk_duration_s = model_config.audio.chunk_duration_s
 
     # ------------------------------------------------------------------
@@ -193,11 +205,10 @@ def main(
                         chunk_duration_s=chunk_duration_s,
                     )
 
-                region_data = [(0, logits_t.cpu())]
+                region_data_cpu = [(0, logits_t.cpu())]
                 intervals = _apply_threshold(
-                    region_data, threshold, conv_settings, l_encoder
+                    region_data_cpu, thresholds_dict, conv_settings, l_encoder
                 )
-                # intervals_to_segments uses the second arg as "uid" field name
                 clip_segs = intervals_to_segments(intervals, clip_id)
                 seg_rows.extend(clip_segs)
 
@@ -275,7 +286,12 @@ def main(
     logger.info("─" * 50)
 
 
-if __name__ == "__main__":
+def entrypoint() -> None:
+    MODEL_ROOT = Path(
+        os.environ["MODEL_ROOT"]
+        if "MODEL_ROOT" in os.environ
+        else Path.home() / ".cache/dlplusplus"
+    )
     parser = argparse.ArgumentParser(
         description=(
             "Run VTC inference on clips from WebDataset shards, "
@@ -291,19 +307,18 @@ if __name__ == "__main__":
     parser.add_argument("dataset", help="Dataset name (e.g. seedlings_10)")
     parser.add_argument(
         "--config",
-        default="VTC-2.0/model/config.yml",
-        help="segma model config (default: VTC-2.0/model/config.yml)",
+        default=MODEL_ROOT / "vtc/model/config.toml",
+        help=f"segma model config (default: {MODEL_ROOT / 'vtc/model/config.toml'})",
     )
     parser.add_argument(
         "--checkpoint",
-        default="VTC-2.0/model/best.ckpt",
-        help="segma model checkpoint (default: VTC-2.0/model/best.ckpt)",
+        default=MODEL_ROOT / "vtc/model/best.ckpt",
+        help=f"segma model checkpoint (default: {MODEL_ROOT / 'vtc/model/best.ckpt'})",
     )
     parser.add_argument(
-        "--threshold",
-        type=float,
-        default=0.5,
-        help="Sigmoid threshold (default: 0.5)",
+        "--thresholds_path",
+        default=MODEL_ROOT / "vtc/thresholds/f1.toml",
+        help=f"Per-label threshold TOML (default: {MODEL_ROOT / 'vtc/thresholds/f1.toml'})",
     )
     parser.add_argument(
         "--min_duration_on_s",
@@ -334,3 +349,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     main(**vars(args))
+
+
+if __name__ == "__main__":
+    entrypoint()
