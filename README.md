@@ -6,12 +6,13 @@ A feature processing and data loading framework for child-centered long-form aud
 
 1. [Installation](#1-installation)
 2. [Quick Start](#2-quick-start)
-3. [Pipeline](#3-pipeline)
-4. [Project Structure](#4-project-structure)
-5. [Dataloader](#5-dataloader)
-6. [Citation](#6-citation)
-7. [Component Models](#7-component-models)
-8. [Acknowledgements](#8-acknowledgements)
+3. [Configuration](#3-configuration)
+4. [Pipeline](#4-pipeline)
+5. [Project Structure](#5-project-structure)
+6. [Dataloader](#6-dataloader)
+7. [Citation](#7-citation)
+8. [Component Models](#8-component-models)
+9. [Acknowledgements](#9-acknowledgements)
 
 ---
 
@@ -20,30 +21,21 @@ A feature processing and data loading framework for child-centered long-form aud
 **Requirements:** Linux or macOS, Python ≥ 3.13, [uv](https://docs.astral.sh/uv/), [ffmpeg](https://ffmpeg.org/).
 
 ```bash
-# Check system dependencies:
-./check_sys_dependencies.sh
-
-# Clone (includes model weights via git-lfs):
 git clone https://github.com/bootphon/DLplusplus.git
 cd DLplusplus
 
 # Install Python dependencies:
 uv sync
 
-# Download the Brouhaha SNR & VTC2.0 checkpoints:
-uv run python scripts/download_models.py
+# Download model checkpoints (Brouhaha + VTC 2.0):
+uv run download-models
 ```
 
-<details>
-<summary>Alternative: pip install</summary>
+Model weights are cached to `~/.cache/dlplusplus/` by default. Override with `MODEL_ROOT`:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+MODEL_ROOT=/shared/models uv run download-models
 ```
-
-</details>
 
 ---
 
@@ -51,34 +43,25 @@ pip install -r requirements.txt
 
 ### Generate a manifest from a directory
 
-If your audio files live in a directory (no pre-existing metadata file), generate
-a ready-to-use manifest with:
-
 ```bash
-python scripts/make_manifest.py /path/to/audio/ -name my_dataset
+uv run make-manifest /path/to/audio/ --name my_dataset
 ```
 
-This recursively scans for all common audio formats (`wav`, `flac`, `mp3`, `ogg`,
-`opus`, `m4a`, `aac`, `aiff`, `wma`) and writes `manifests/my_dataset.csv` with
-columns `path` (absolute), `uid` (filename stem), and `ext` (format).
+Recursively scans for all common audio formats (`wav`, `flac`, `mp3`, `ogg`, `opus`, `m4a`, `aac`, `aiff`, `wma`) and writes `manifests/my_dataset.csv` with columns `path` (absolute), `uid` (filename stem), and `ext` (format).
 
 ### Single-step inference
 
-Run an individual pipeline step on a folder of audio files:
-
 ```bash
-# Speaker diarization (VTC)
-uv run python -m audio_pipeline.pipeline.vtc my_data \
-    --manifest manifests/my_dataset.csv
-
 # Voice activity detection (VAD)
 uv run python -m audio_pipeline.pipeline.vad my_data \
+    --manifest manifests/my_dataset.csv
+
+# Speaker diarization (VTC)
+uv run python -m audio_pipeline.pipeline.vtc my_data \
     --manifest manifests/my_dataset.csv
 ```
 
 ### Full pipeline on a SLURM cluster
-
-Process an entire dataset end-to-end:
 
 ```bash
 # First run with a custom manifest:
@@ -91,11 +74,61 @@ bash slurm/pipeline.sh my_data \
 bash slurm/pipeline.sh my_data
 ```
 
-This submits five SLURM jobs — four feature extraction steps in parallel, then a packaging step that depends on all four. See the [Pipeline](#3-pipeline) section for full documentation.
+This submits five SLURM jobs — four feature extraction steps in parallel, then a packaging step that depends on all four. See the [Pipeline](#4-pipeline) section for full documentation.
 
 ---
 
-## 3. Pipeline
+## 3. Configuration
+
+### Workspace layout
+
+All pipeline outputs are anchored to a single workspace root. Set `DLPP_WORKSPACE` to control where everything lands:
+
+```bash
+export DLPP_WORKSPACE=/scratch/my_project
+```
+
+| Sub-directory | Default (relative to workspace) | Override env var |
+|---------------|----------------------------------|-----------------|
+| Manifests | `$DLPP_WORKSPACE/manifests/` | `DLPP_MANIFESTS_DIR` |
+| Pipeline output | `$DLPP_WORKSPACE/output/` | `DLPP_OUTPUT_DIR` |
+| Figures | `$DLPP_WORKSPACE/figures/` | `DLPP_FIGURES_DIR` |
+| SLURM logs | `$DLPP_WORKSPACE/logs/` | `DLPP_LOGS_DIR` |
+
+When `DLPP_WORKSPACE` is unset, all directories resolve relative to the current working directory (original behaviour).
+
+Individual directories can be overridden independently:
+
+```bash
+DLPP_OUTPUT_DIR=/fast-scratch/output uv run python -m audio_pipeline.pipeline.vad my_data
+```
+
+### Model cache
+
+Downloaded model weights are stored under `MODEL_ROOT`:
+
+```
+~/.cache/dlplusplus/       (default MODEL_ROOT)
+├── brouhaha/
+│   └── best.ckpt
+└── vtc/
+    ├── model/
+    │   ├── best.ckpt
+    │   └── config.toml
+    └── thresholds/
+        ├── f1.toml        # F1-optimal per-label thresholds
+        └── hp.toml        # High-precision per-label thresholds
+```
+
+VTC 2.0 supports two threshold sets:
+- **`f1.toml`** — maximises F1 per label (default)
+- **`hp.toml`** — maximises precision (fewer false positives)
+
+Pass `--thresholds_path` to `vtc.py` or `vtc_on_clips.py` to switch between them.
+
+---
+
+## 4. Pipeline
 
 The pipeline orchestrator (`slurm/pipeline.sh`) runs a preflight check, then submits five SLURM jobs:
 
@@ -194,7 +227,7 @@ Within each tier, the midpoint closest to the ideal evenly-distributed position 
 - `output/{dataset}/shards/manifest.csv` — per-clip metadata
 - `output/{dataset}/shards/samples/` — random sample clips for manual validation
 - `output/{dataset}/stats/` — Parquet DataFrames at multiple granularities (clip, segment, turn, conversation, file)
-- `figures/{dataset}/dashboard/` — 6 PNG diagnostic dashboards (see `src/plotting/README.md`)
+- `figures/{dataset}/dashboard/` — 6 PNG diagnostic dashboards
 
 ### Clip metadata
 
@@ -209,15 +242,15 @@ The `.json` metadata contains:
 
 **Source** — `uid`, `clip_idx`, `clip_id`, `abs_onset`, `abs_offset`, `duration`, `source_path`, `audio_fmt`, `sample_rate`.
 
-**VTC speech** — `vtc_speech_duration`, `vtc_speech_density`, `n_vtc_segments`, `mean_vtc_seg_duration`, `mean_vtc_gap`, `n_turns`, `n_labels`, `labels_present`, `has_adult`, `dominant_label`, `label_durations`, `vad_coverage_by_label` (fraction of each VTC label also covered by VAD).
+**VTC speech** — `vtc_speech_duration`, `vtc_speech_density`, `n_vtc_segments`, `mean_vtc_seg_duration`, `mean_vtc_gap`, `n_turns`, `n_labels`, `labels_present`, `has_adult`, `dominant_label`, `label_durations`, `vad_coverage_by_label`.
 
-**Demographics** — `child_speech_duration`, `adult_speech_duration`, `child_fraction` (share of VTC speech that is child).
+**Demographics** — `child_speech_duration`, `adult_speech_duration`, `child_fraction`.
 
 **VAD speech** — `vad_speech_duration`, `vad_speech_density`, `n_vad_segments`.
 
 **VAD–VTC agreement** — `vad_vtc_iou`: frame-level Intersection over Union between the two systems' masks.
 
-**SNR & C50** — Per-VTC-segment SNR and C50 averages are computed by the `segment_snr` post-hoc step and stored in `output/{dataset}/segment_snr/` parquets (columns: `uid`, `onset`, `offset`, `label`, `snr_mean`, `c50_mean`). During packaging, these are aggregated into per-clip summary statistics in the manifest CSV: `snr_mean`, `snr_std`, `snr_min`, `snr_max`, `c50_mean`, `c50_std`, `c50_min`, `c50_max` (dB). Higher C50 = less reverberation. The full per-frame time-series arrays remain available in `snr/{uid}.npz` for downstream analysis.
+**SNR & C50** — Per-VTC-segment SNR and C50 averages are computed by the `segment_snr` post-hoc step and stored in `output/{dataset}/segment_snr/` parquets. During packaging, these are aggregated into per-clip summary statistics in the manifest CSV: `snr_mean`, `snr_std`, `snr_min`, `snr_max`, `c50_mean`, `c50_std`, `c50_min`, `c50_max` (dB). The full per-frame time-series arrays remain available in `snr/{uid}.npz`.
 
 **ESC environment** — `dominant_esc` (category name), `esc_profile` (dict of mean probability per category).
 
@@ -234,132 +267,114 @@ The `.json` metadata contains:
 
 ---
 
-## 4. Project Structure
+## 5. Project Structure
 
 ```
 DLplusplus/
 ├── src/
-│   ├── utils.py             # Shared utilities (manifest I/O, paths, logging)
-│   ├── compat.py            # Compatibility shims (torchaudio patches)
-│   ├── pipeline/            # CLI entry points (one per pipeline step)
-│   │   ├── vad.py           #   Step 1: TenVAD voice activity detection
-│   │   ├── vtc.py           #   Step 2: BabyHuBERT speaker diarization
-│   │   ├── snr.py           #   Step 3: Brouhaha SNR/C50 extraction
-│   │   ├── esc.py           #   Step 4: PANNs CNN14 ESC
-│   │   ├── package.py       #   Step 5: Audio clipping + WebDataset shards
-│   │   ├── segment_snr.py   #   Post-hoc per-segment SNR/C50 averaging
-│   │   ├── compare.py       #   VAD vs VTC comparison helpers
-│   │   ├── normalize.py     #   Manifest normalization
-│   │   └── preflight.py     #   Pre-pipeline dataset scan
-│   ├── packaging/           # Clip building, shard writing, listener
-│   │   ├── clips.py         #   Clip tiling algorithm (6-tier fallback)
-│   │   ├── stats.py         #   Per-clip/file/conversation statistics
-│   │   ├── writer.py        #   WebDataset tar shard writer
-│   │   └── listener.py      #   Sample extraction for validation
-│   ├── core/                # Reusable, tested modules
-│   │   ├── intervals.py     #   Interval arithmetic (merge, IoU)
-│   │   ├── conversations.py #   Turn/conversation extraction
-│   │   ├── vad_processing.py#   Per-file VAD (worker code)
-│   │   ├── parallel.py      #   Process pool driver with progress queue
-│   │   ├── checkpoint.py    #   Checkpoint save / resume
-│   │   └── metadata.py      #   VTC metadata constructors
-│   └── plotting/            # Dashboard figure generation
-│       ├── figures.py       #   Orchestrator (calls sub-modules)
-│       ├── snr_noise.py     #   SNR quality + noise environment
-│       ├── speech_turns.py  #   Conversational structure + turns
-│       ├── overview.py      #   Dataset overview + correlation + text summary
-│       └── packaging.py     #   Per-clip/label summary grids
-├── dataloader/              # Dataloader++ package (see Section 5)
-│   ├── types.py             #   Shared type aliases and enums
-│   ├── config.py            #   PipelineConfig + FilterConfig
-│   ├── build.py             #   build_manifest() — Big Join + filters
-│   ├── processor/           #   Feature Processor ABCs (offline extraction)
-│   │   ├── base.py          #     FeatureProcessor ABC
-│   │   └── registry.py      #     Processor discovery & registration
-│   ├── adapters/            #   Pipeline output adapters
-│   │   ├── vad.py           #     VADAdapter (reads vad_meta, vad_raw, vad_merged)
-│   │   ├── vtc.py           #     VTCAdapter (reads vtc_meta, vtc_raw, vtc_merged)
-│   │   ├── snr.py           #     SNRAdapter (reads snr_meta, snr/*.npz)
-│   │   └── esc.py           #     ESCAdapter (reads esc_meta, esc/*.npz)
-│   ├── loader/              #   Feature Loader ABCs (waveform + metadata I/O)
-│   │   ├── base.py          #     FeatureLoader ABC
-│   │   ├── waveform.py      #     WaveformLoader
-│   │   └── metadata.py      #     MetadataLoader (JSON/Parquet/NPZ)
-│   ├── manifest/            #   Manifest management
-│   │   ├── schema.py        #     MetadataManifest schema
-│   │   ├── joiner.py        #     ManifestJoiner (Big Join)
-│   │   └── store.py         #     MetadataStore (unified I/O)
-│   ├── transform/           #   Runtime data transforms
-│   │   ├── base.py          #     DataProcessor ABC + Compose
-│   │   ├── audio.py         #     Resample, segment, normalize
-│   │   └── label.py         #     Label encoding, mask generation
-│   ├── batch/               #   Batching and collation
-│   │   ├── base.py          #     Collator ABC
-│   │   ├── data_batch.py    #     DataBatch container
-│   │   └── speech.py        #     SpeechCollator implementation
-│   └── dataset/             #   PyTorch Dataset implementations
-│       ├── base.py          #     SpeechDataset ABC
-│       └── webdataset.py    #     WebDataset-backed loader
+│   ├── audio_pipeline/           # Main pipeline package
+│   │   ├── paths.py              #   ProjectPaths (DLPP_WORKSPACE and per-dir overrides)
+│   │   ├── utils.py              #   Shared utilities (manifest I/O, parquet helpers)
+│   │   ├── compat.py             #   Compatibility shims (torchaudio patches)
+│   │   ├── make_manifest.py      #   Console script: `uv run make-manifest`
+│   │   ├── download_models.py    #   Console script: `uv run download-models`
+│   │   ├── pipeline/             #   CLI entry points (one per pipeline step)
+│   │   │   ├── vad.py            #     Step 1: TenVAD voice activity detection
+│   │   │   ├── vtc.py            #     Step 2: BabyHuBERT speaker diarization
+│   │   │   ├── snr.py            #     Step 3: Brouhaha SNR/C50 extraction
+│   │   │   ├── esc.py            #     Step 4: PANNs CNN14 ESC
+│   │   │   ├── package.py        #     Step 5: Audio clipping + WebDataset shards
+│   │   │   ├── vtc_clip_alignment.py  # Post-hoc VTC clip alignment analysis
+│   │   │   ├── segment_snr.py    #     Post-hoc per-segment SNR/C50 averaging
+│   │   │   ├── normalize.py      #     Manifest normalization
+│   │   │   ├── preflight.py      #     Pre-pipeline dataset scan
+│   │   │   └── resources.py      #     SLURM resource estimation helpers
+│   │   ├── packaging/            #   Clip building, shard writing, listener
+│   │   │   ├── clips.py          #     Clip tiling algorithm (6-tier fallback)
+│   │   │   ├── stats.py          #     Per-clip/file/conversation statistics
+│   │   │   ├── writer.py         #     WebDataset tar shard writer
+│   │   │   ├── loaders.py        #     Audio/metadata loaders for packaging
+│   │   │   ├── packer.py         #     Shard packing orchestration
+│   │   │   └── listener.py       #     Sample extraction for validation
+│   │   ├── core/                 #   Reusable, tested modules
+│   │   │   ├── intervals.py      #     Interval arithmetic (merge, IoU)
+│   │   │   ├── conversations.py  #     Turn/conversation extraction
+│   │   │   ├── vad_processing.py #     Per-file VAD (worker code)
+│   │   │   ├── parallel.py       #     Process pool driver with progress queue
+│   │   │   ├── checkpoint.py     #     Checkpoint save / resume
+│   │   │   ├── metadata.py       #     VTC metadata constructors
+│   │   │   ├── audio.py          #     Audio I/O helpers
+│   │   │   └── brouhaha.py       #     Brouhaha SNR inference helpers
+│   │   ├── analysis/             #   Exploratory analysis scripts
+│   │   │   ├── vtc_on_clips.py   #     Run VTC on packaged WebDataset clips
+│   │   │   └── ...               #     Other analysis tools
+│   │   └── plotting/             #   Dashboard figure generation
+│   │       ├── figures.py        #     Orchestrator (calls sub-modules)
+│   │       ├── master.py         #     Master dashboard layout
+│   │       ├── clip_alignment.py #     Clip alignment plots
+│   │       ├── compare.py        #     VAD vs VTC comparison
+│   │       └── utils.py          #     Plotting utilities
+│   └── dataloader/               # Dataloader++ package (see Section 6)
+│       ├── types.py              #   Shared type aliases and enums
+│       ├── config.py             #   PipelineConfig + FilterConfig
+│       ├── build.py              #   build_manifest() — Big Join + filters
+│       ├── create.py             #   Dataset creation entry point
+│       ├── paths.py              #   Path resolution (mirrors audio_pipeline/paths.py)
+│       ├── processor/            #   Feature Processor ABCs (offline extraction)
+│       ├── adapters/             #   Pipeline output adapters (VAD, VTC, SNR, ESC)
+│       ├── loader/               #   Feature Loader ABCs (waveform + metadata I/O)
+│       ├── manifest/             #   Manifest management (schema, joiner, store)
+│       ├── transform/            #   Runtime data transforms (audio, label, waveform)
+│       ├── batch/                #   Batching and collation (DataBatch, SpeechCollator)
+│       ├── dataset/              #   PyTorch Dataset implementations
+│       └── compat/               #   Upstream compatibility shims
 ├── slurm/
-│   ├── pipeline.sh          # One-command pipeline orchestrator
-│   ├── vad.slurm            # SLURM: VAD (CPU, 48 workers)
-│   ├── vtc.slurm            # SLURM: VTC (GPU array, 3 shards)
-│   ├── snr.slurm            # SLURM: Brouhaha SNR (GPU array, 2 shards)
-│   ├── esc.slurm            # SLURM: PANNs ESC (GPU array, 2 shards)
-│   ├── segment_snr.slurm    # SLURM: Per-segment SNR (GPU array)
-│   ├── vtc_clips.slurm      # SLURM: VTC on packaged clips
-│   ├── snr_diagnostic.slurm # SLURM: SNR masking diagnostics
-│   ├── package_test.sh      # Quick end-to-end packaging test
-│   ├── repackage_test.sh    # Re-package + clip alignment test
-│   └── test.slurm           # SLURM: pytest on compute node
-├── tests/                   # pytest suite covering all core modules
-│   ├── conftest.py          #   Audio fixtures + skip markers
-│   ├── fixtures/            #   Short WAV files (committed)
+│   ├── pipeline.sh               # One-command pipeline orchestrator
+│   ├── vad.slurm                 # SLURM: VAD (CPU, 48 workers)
+│   ├── vtc.slurm                 # SLURM: VTC (GPU array, 3 shards)
+│   ├── snr.slurm                 # SLURM: Brouhaha SNR (GPU array, 2 shards)
+│   ├── esc.slurm                 # SLURM: PANNs ESC (GPU array, 2 shards)
+│   ├── segment_snr.slurm         # SLURM: Per-segment SNR (GPU array)
+│   ├── vtc_clips.slurm           # SLURM: VTC on packaged clips
+│   ├── snr_diagnostic.slurm      # SLURM: SNR masking diagnostics
+│   ├── package_test.sh           # Quick end-to-end packaging test
+│   ├── repackage_test.sh         # Re-package + clip alignment test
+│   └── test.slurm                # SLURM: pytest on compute node
+├── tests/                        # pytest suite covering all core modules
+│   ├── conftest.py               #   Audio fixtures + skip markers
+│   ├── fixtures/                 #   Short WAV files (committed)
 │   ├── test_intervals.py
 │   ├── test_checkpoint.py
 │   ├── test_metadata.py
 │   ├── test_parallel.py
-│   ├── test_clips.py        #   Clip tiling + tier fallback chain
-│   ├── test_snr.py          #   Brouhaha SNR extraction
-│   ├── test_esc.py        #   PANNs ESC
+│   ├── test_clips.py             #   Clip tiling + tier fallback chain
+│   ├── test_snr.py               #   Brouhaha SNR extraction
+│   ├── test_esc.py               #   PANNs ESC
 │   ├── test_vad_processing.py
 │   ├── test_reproducibility.py
-│   └── test_stitched_audio.py
+│   ├── test_stitched_audio.py
+│   └── test_create_dataloader.py
 ├── docs/
-│   └── DATALOADER_DESIGN.md # Dataloader++ specification
-├── scripts/
-│   ├── download_brouhaha.py # Auto-download Brouhaha checkpoint
-│   └── make_manifest.py     # Generate manifest from audio directory
-├── models/                  # Brouhaha checkpoint (gitignored, auto-downloaded)
-│   └── best/checkpoints/
-│       └── best.ckpt        #   ~47 MB, from ylacombe/brouhaha-best
-├── VTC-2.0/                 # BabyHuBERT model weights & config
-│   └── model/
-│       ├── best.ckpt        #   Trained checkpoint (~1 GB, git-lfs)
-│       └── config.yml       #   segma training config
-├── manifests/               # Dataset manifests (one CSV per dataset)
-├── output/                  # Pipeline outputs (per-dataset subdirs)
-├── figures/                 # Diagnostic plots (per-dataset subdirs)
-├── logs/                    # SLURM logs + benchmark records
-├── pyproject.toml           # Python project config (uv / pip)
-├── requirements.txt         # Pinned dependency lockfile
-└── check_sys_dependencies.sh
+│   └── DATALOADER_DESIGN.md      # Dataloader++ specification
+├── pyproject.toml
+└── README.md
 ```
 
 ### Data flow
 
-All paths are derived from the dataset name:
-
 ```
-manifests/{dataset}.csv  →  output/{dataset}/   (metadata, segments, metrics)
-                         →  figures/{dataset}/  (plots)
+$DLPP_WORKSPACE/
+├── manifests/{dataset}.csv       (input manifest)
+├── output/{dataset}/             (pipeline outputs — VAD, VTC, SNR, ESC, shards)
+├── figures/{dataset}/            (diagnostic plots)
+└── logs/                         (SLURM job logs)
 ```
 
 ### Running tests
 
 ```bash
-# Login node (TenVAD tests auto-skip):
-uv run python3 -m pytest tests/
+# Login node (TenVAD tests auto-skip on non-compute nodes):
+uv run python -m pytest tests/
 
 # Compute node (full suite):
 sbatch slurm/test.slurm
@@ -367,11 +382,11 @@ sbatch slurm/test.slurm
 
 ---
 
-## 5. Dataloader
+## 6. Dataloader
 
 The `dataloader/` package implements the **Dataloader++** specification for Meta's speech training infrastructure. It bridges the offline feature processing pipeline (above) with online model training.
 
-See [`docs/DATALOADER_DESIGN.md`](docs/DATALOADER_DESIGN.md) for the full design document.
+See [`src/dataloader/README.md`](src/dataloader/README.md) and [`docs/DATALOADER_DESIGN.md`](docs/DATALOADER_DESIGN.md) for the full design document.
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
@@ -384,7 +399,7 @@ See [`docs/DATALOADER_DESIGN.md`](docs/DATALOADER_DESIGN.md) for the full design
 
 ---
 
-## 6. Citation
+## 7. Citation
 
 ```bibtex
 @software{dlplusplus,
@@ -397,7 +412,7 @@ See [`docs/DATALOADER_DESIGN.md`](docs/DATALOADER_DESIGN.md) for the full design
 
 ---
 
-## 7. Component Models
+## 8. Component Models
 
 DL++ integrates the following models as feature processing stages:
 
@@ -408,6 +423,8 @@ DL++ integrates the following models as feature processing stages:
 ### BabyHuBERT — Voice Type Classification (VTC 2.0)
 
 Speaker diarization into four types (KCHI, OCH, MAL, FEM), trained on child-centered long-form recordings. Used in Step 2 (GPU).
+
+Weights are downloaded automatically to `$MODEL_ROOT/vtc/` by `uv run download-models`.
 
 Training code: [LAAC-LSCP/BabyHuBERT](https://github.com/LAAC-LSCP/BabyHuBERT)
 
@@ -423,40 +440,11 @@ Training code: [LAAC-LSCP/BabyHuBERT](https://github.com/LAAC-LSCP/BabyHuBERT)
 }
 ```
 
-<details>
-<summary>Earlier VTC versions</summary>
-
-**VTC 1.5 (Whisper-VTC)** — GitHub: [LAAC-LSCP/VTC-IS-25](https://github.com/LAAC-LSCP/VTC-IS-25)
-
-```bibtex
-@inproceedings{kunze25_interspeech,
-    title     = {{Challenges in Automated Processing of Speech from Child Wearables: The Case of Voice Type Classifier}},
-    author    = {Tarek Kunze and Marianne Métais and Hadrien Titeux and Lucas Elbert and Joseph Coffey and Emmanuel Dupoux and Alejandrina Cristia and Marvin Lavechin},
-    year      = {2025},
-    booktitle = {{Interspeech 2025}},
-    pages     = {2845--2849},
-    doi       = {10.21437/Interspeech.2025-1962},
-}
-```
-
-**VTC 1.0 (PyanNet-VTC)** — GitHub: [MarvinLvn/voice-type-classifier](https://github.com/MarvinLvn/voice-type-classifier)
-
-```bibtex
-@inproceedings{lavechin20_interspeech,
-    title     = {An Open-Source Voice Type Classifier for Child-Centered Daylong Recordings},
-    author    = {Marvin Lavechin and Ruben Bousbib and Hervé Bredin and Emmanuel Dupoux and Alejandrina Cristia},
-    year      = {2020},
-    booktitle = {Interspeech 2020},
-    pages     = {3072--3076},
-    doi       = {10.21437/Interspeech.2020-1690},
-}
-```
-
-</details>
-
 ### Brouhaha — SNR & C50 Estimation
 
 [marianne-m/brouhaha-vad](https://github.com/marianne-m/brouhaha-vad) — per-frame signal-to-noise ratio and clarity (C50) extraction. Used in Step 3 (GPU).
+
+Weights are downloaded automatically to `$MODEL_ROOT/brouhaha/` by `uv run download-models`.
 
 ```bibtex
 @inproceedings{lavechin2023brouhaha,
@@ -486,8 +474,8 @@ Training code: [LAAC-LSCP/BabyHuBERT](https://github.com/LAAC-LSCP/BabyHuBERT)
 
 ---
 
-## 8. Acknowledgements
+## 9. Acknowledgements
 
 This work uses the [segma](https://github.com/arxaqapi/segma) library, inspired by [pyannote.audio](https://github.com/pyannote/pyannote-audio).
 
-This work was performed using HPC resources from GENCI-IDRIS (Grant 2024-AD011015450 and 2025-AD011016414) and was developed as part of the ExELang project funded by the European Union (ERC, ExELang, Grant No 101001095).
+This work was performed using HPC resources from GENCI-IDRIS (Grant 2024-AD011015450 and 2025-AD011016414)
