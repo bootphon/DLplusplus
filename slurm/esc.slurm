@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=esc_panns
 #SBATCH --output=/home/%u/logs/dlplusplus/esc/esc_%A_%a.out
-#SBATCH --error=/home/%u/logs/dlplusplus/esc/esc_%A_%a.err
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --time=24:00:00
@@ -34,7 +33,7 @@ module load ffmpeg
 echo ""
 
 PYTHONUNBUFFERED=1 \
-uv run src/pipeline/esc.py "$DATASET" \
+uv run python -m audio_pipeline.pipeline.esc "$DATASET" \
     --array_id "$SLURM_ARRAY_TASK_ID" \
     --array_count "$SLURM_ARRAY_TASK_COUNT" \
     "$@"

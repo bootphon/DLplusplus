@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=vad_ten
-#SBATCH --output=logs/vad/ten_%j.out
-#SBATCH --error=logs/vad/ten_%j.err
+#SBATCH --output=/home/%u/logs/dlplusplus/vad/ten_%j.out
 #SBATCH --cpus-per-task=48
 #SBATCH --mem=128G
 #SBATCH --time=24:00:00

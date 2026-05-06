@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=snr_brouhaha
-#SBATCH --output=logs/snr/snr_%A_%a.out
-#SBATCH --error=logs/snr/snr_%A_%a.err
+#SBATCH --output=/home/%u/logs/dlplusplus/snr/snr_%A_%a.out
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --time=24:00:00
@@ -34,7 +33,7 @@ module load ffmpeg
 
 echo ""
 
-mkdir -p logs/snr
+mkdir -p "${HOME}/logs/dlplusplus/snr"
 
 PYTHONUNBUFFERED=1 \
 uv run python -m audio_pipeline.pipeline.snr "$DATASET" \

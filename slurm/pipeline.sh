@@ -38,7 +38,7 @@ EXTRA_ARGS=""
 
 VTC_THRESHOLD=0.5          # fixed sigmoid threshold — no adaptive sweep
 
-mkdir -p logs/{vad,vtc,snr,esc,package}
+mkdir -p ${HOME}/logs/dlplusplus/{vad,vtc,snr,esc,package}
 
 # ---------- Preflight: auto-detect resources ------------------------------
 
@@ -115,8 +115,7 @@ echo "  4. ESC (PANNs)  : $ESC_JOB  (array ${ESC_ARRAY})"
 PKG_JOB=$(sbatch --parsable \
     --dependency=afterok:${VAD_JOB}:${VTC_JOB}:${SNR_JOB}:${ESC_JOB} \
     --job-name=pkg_dash \
-    --output=logs/package/pkg_%j.out \
-    --error=logs/package/pkg_%j.err \
+    --output=/home/%u/logs/dlplusplus/package/pkg_%j.out \
     --cpus-per-task=8 \
     --mem=64G \
     --time=04:00:00 \
@@ -151,5 +150,5 @@ echo "Chain: [VAD($VAD_JOB) | VTC($VTC_JOB) | SNR($SNR_JOB) | ESC($ESC_JOB)] →
 echo ""
 echo "Monitor : squeue -u \$USER"
 echo "Cancel  : scancel $VAD_JOB $VTC_JOB $SNR_JOB $ESC_JOB $PKG_JOB"
-echo "Pkg log : logs/package/pkg_\${PKG_JOB}.out"
+echo "Pkg log : ${HOME}/logs/dlplusplus/package/pkg_\${PKG_JOB}.out"
 echo ""

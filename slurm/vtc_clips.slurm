@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=vtc_clips
-#SBATCH --output=logs/vtc/vtc_clips_%A_%a.out
-#SBATCH --error=logs/vtc/vtc_clips_%A_%a.err
+#SBATCH --output=/home/%u/logs/dlplusplus/vtc/vtc_clips_%A_%a.out
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --time=02:00:00

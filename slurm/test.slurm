@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=vtc_tests
-#SBATCH --output=logs/tests/pytest_%j.out
-#SBATCH --error=logs/tests/pytest_%j.err
+#SBATCH --output=/home/%u/logs/dlplusplus/tests/pytest_%j.out
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=00:30:00

@@ -22,6 +22,8 @@ import os
 import sys
 from pathlib import Path
 
+from audio_pipeline.paths import PROJECT_PATHS
+
 # All audio extensions that the pipeline can consume.
 AUDIO_EXTENSIONS: frozenset[str] = frozenset(
     {
@@ -37,9 +39,6 @@ AUDIO_EXTENSIONS: frozenset[str] = frozenset(
         "wma",
     }
 )
-
-# Manifest directory is resolved relative to this script's repo root.
-REPO_ROOT = Path(__file__).parent.parent
 
 
 def scan_audio_files(root: Path) -> list[tuple[str, str, str]]:
@@ -130,9 +129,8 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Write manifest.
     # ------------------------------------------------------------------
-    manifests_dir = REPO_ROOT / "manifests"
-    manifests_dir.mkdir(parents=True, exist_ok=True)
-    output = manifests_dir / f"{name}.csv"
+    PROJECT_PATHS.manifests_dir.mkdir(parents=True, exist_ok=True)
+    output = PROJECT_PATHS.manifests_dir / f"{name}.csv"
 
     if output.exists():
         print(f"WARNING: Overwriting existing manifest: {output}", file=sys.stderr)

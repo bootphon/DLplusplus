@@ -15,6 +15,9 @@ from typing import Any
 
 import polars as pl
 
+from audio_pipeline.paths import PROJECT_PATHS
+from audio_pipeline.utils import get_dataset_paths
+
 logger = logging.getLogger(__name__)
 
 
@@ -289,9 +292,9 @@ def main(dataset: str = "seedlings_10", output_dir: Path | None = None):
     )
 
     # Set paths
-    project_root = Path(__file__).parent.parent.parent
-    vad_path = project_root / "output" / dataset / "vad_merged"
-    vtc_path = project_root / "output" / dataset / "vtc_merged"
+    ds_path = get_dataset_paths(dataset)
+    vad_path = ds_path.output / "vad_merged"
+    vtc_path = ds_path.output / "vtc_merged"
 
     if not vad_path.exists():
         raise FileNotFoundError(f"VAD path not found: {vad_path}")
@@ -326,7 +329,7 @@ def main(dataset: str = "seedlings_10", output_dir: Path | None = None):
 
     # Write CSV
     if output_dir is None:
-        output_dir = project_root / "output" / dataset
+        output_dir = ds_path.output
     output_dir.mkdir(parents=True, exist_ok=True)
 
     output_csv = output_dir / "vad_coverage_analysis.csv"

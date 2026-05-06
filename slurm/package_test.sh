@@ -11,9 +11,10 @@ set -euo pipefail
 #   bash slurm/package_test.sh --force   # wipe outputs and re-run from scratch
 #
 
-DATASET="seedlings_1"
+DATASET_NAME="seedlings_1"
 SAMPLE="0.01"
 THRESHOLD="0.50"
+DATASET_ROOT="${DLPP_WORKSPACE}/output/${DATASET_NAME}"
 
 FORCE=false
 if [[ "${1:-}" == "--force" ]]; then
@@ -25,21 +26,22 @@ cd "$(dirname "$0")/.." || exit 1
 
 if $FORCE; then
     echo ""
-    echo "Deleting output/${DATASET} ..."
-    rm -rf "output/${DATASET}"
+    echo "Deleting ${DATASET_NAME} ..."
+    rm -rf "${DATASET_ROOT}"
 fi
 echo ""
 echo "╔══════════════════════════════════════════╗"
 echo "║  Packaging test — 1% seedlings @ t=$THRESHOLD  ║"
 echo "╚══════════════════════════════════════════╝"
-echo "  dataset  : $DATASET"
+echo "  dataset  : $DATASET_NAME"
+echo "  root dir : ${DATASET_ROOT}"
 echo "  sample   : $SAMPLE"
 echo "  threshold: $THRESHOLD"
 echo ""
 
 # ---------- Manifest symlink ---------------------------------------------
-MANIFEST_SRC="manifests/seedlings.csv"
-MANIFEST_DST="manifests/${DATASET}.csv"
+MANIFEST_SRC="${DLPP_WORKSPACE}/manifests/seedlings.csv"
+MANIFEST_DST="${DLPP_WORKSPACE}/manifests/${DATASET_NAME}.csv"
 
 if [ ! -e "$MANIFEST_SRC" ]; then
     echo "ERROR: $MANIFEST_SRC not found" >&2
@@ -51,7 +53,7 @@ if [ ! -e "$MANIFEST_DST" ]; then
     echo "  Created symlink: ${MANIFEST_DST} → $(realpath "$MANIFEST_SRC")"
 fi
 
-mkdir -p logs/package
+mkdir -p "${HOME}/logs/dlplusplus/package"
 
 # ---------- Step 1a: VAD (CPU) --------------------------------------------
 
@@ -66,7 +68,7 @@ echo "  1a. VAD (t=$THRESHOLD)    : $VAD_JOB"
 
 VTC_JOB=$(sbatch --parsable \
     --array=0 \
-    slurm/vtc.slurm "$DATASET" \
+    slurm/vtc.slurm "$DATASET_NAME" \
         --no_regions \
         --threshold "$THRESHOLD" \
         --sample "$SAMPLE")
@@ -79,7 +81,6 @@ PKG_JOB=$(sbatch --parsable \
     --dependency=afterok:${VAD_JOB}:${VTC_JOB} \
     --job-name=package \
     --output=/home/%u/logs/dlplusplus/package/pkg_%j.out \
-    --error=/home/%u/logs/dlplusplus/package/pkg_%j.err \
     --cpus-per-task=4 \
     --mem=32G \
     --time=02:00:00 \
@@ -97,7 +98,7 @@ PKG_JOB=$(sbatch --parsable \
         ## Tiles full audio into clips, cutting only at silence gaps
         ## All VAD and VTC onsets/offsets should be shifted to relative timestamps
         PYTHONUNBUFFERED=1 \\
-        uv run python -m audio_pipeline.pipeline.package $DATASET \\
+        uv run python -m audio_pipeline.pipeline.package $DATASET_NAME \\
             --sample $SAMPLE \\
             --audio_fmt flac \\
             --max_clip 600
@@ -106,7 +107,7 @@ PKG_JOB=$(sbatch --parsable \
         echo 'Extracting sample clips for validation...'
         PYTHONUNBUFFERED=1 \\
         uv run python -m audio_pipeline.packaging.listener \\
-            output/$DATASET/shards \\
+            ${DATASET_ROOT}/shards \\
             -n 50 --seed 42 --wav --diverse
 
         echo ''
@@ -120,7 +121,7 @@ echo "Monitor: squeue -u \$USER"
 echo "Cancel:  scancel $VAD_JOB $VTC_JOB $PKG_JOB"
 echo ""
 echo "Results:"
-echo "  Shards  : output/$DATASET/shards/"
-echo "  Samples : output/$DATASET/shards/samples/"
-echo "  Logs    : logs/package/pkg_\${PKG_JOB}.out"
+echo "  Shards  : ${DATASET_ROOT}/shards/"
+echo "  Samples : ${DATASET_ROOT}/shards/samples/"
+echo "  Logs    : ${HOME}/logs/dlplusplus/package/pkg_\${PKG_JOB}.out"
 echo ""

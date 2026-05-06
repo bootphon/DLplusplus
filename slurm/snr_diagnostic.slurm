@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=snr_diag
-#SBATCH --output=logs/tests/snr_diag_%j.out
-#SBATCH --error=logs/tests/snr_diag_%j.err
+#SBATCH --output=/home/%u/logs/dlplusplus/tests/snr_diag_%j.out
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --time=02:00:00
@@ -23,7 +22,7 @@ module purge
 module load ffmpeg
 
 echo ""
-mkdir -p logs/tests
+mkdir -p "${HOME}/logs/dlplusplus/tests"
 
 PYTHONUNBUFFERED=1 \
 uv run python -m audio_pipeline.analysis.snr_vad_diagnostic "$DATASET"

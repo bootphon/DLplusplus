@@ -10,6 +10,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import polars as pl
 
+from audio_pipeline.utils import get_dataset_paths
+
 logger = logging.getLogger(__name__)
 
 # Speaker type color scheme
@@ -147,8 +149,8 @@ def main(dataset: str = "seedlings_10", output_dir: Path | None = None):
     )
 
     # Paths
-    project_root = Path(__file__).parent.parent.parent
-    csv_path = project_root / "output" / dataset / "vad_coverage_analysis.csv"
+    ds = get_dataset_paths(dataset)
+    csv_path = ds.output / "vad_coverage_analysis.csv"
 
     if not csv_path.exists():
         raise FileNotFoundError(
@@ -156,7 +158,7 @@ def main(dataset: str = "seedlings_10", output_dir: Path | None = None):
         )
 
     if output_dir is None:
-        output_dir = project_root / "figures" / dataset / "vad"
+        output_dir = ds.figures / "vad"
 
     plot_vad_coverage(csv_path, output_dir)
 
