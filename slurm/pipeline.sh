@@ -45,7 +45,7 @@ mkdir -p logs/{vad,vtc,snr,esc,package}
 echo ""
 echo "Running preflight resource detection..."
 
-PREFLIGHT_ENV=$(uv run python -m src.pipeline.preflight "$DATASET" \
+PREFLIGHT_ENV=$(uv run python -m audio_pipeline.pipeline.preflight "$DATASET" \
     --emit-env $EXTRA_ARGS 2>&1) || {
     echo "WARNING: preflight failed — using conservative defaults"
     PREFLIGHT_ENV=""
@@ -125,7 +125,6 @@ PKG_JOB=$(sbatch --parsable \
         set -euo pipefail
         module purge && module load ffmpeg
         export LD_LIBRARY_PATH=/shared/opt/linux-rocky9-x86_64/gcc-11.4.1/ffmpeg-6.1.1-gynsavpssxgp4ewikkmsa6jswfgi3ycg/lib:\${LD_LIBRARY_PATH:-}
-        export PYTHONPATH=\${PYTHONPATH:-}:\$(pwd)
         export POLARS_SKIP_CPU_CHECK=1
 
         echo ''
@@ -136,7 +135,7 @@ PKG_JOB=$(sbatch --parsable \
         echo ''
 
         PYTHONUNBUFFERED=1 \\
-        uv run python -m src.pipeline.package $DATASET \\
+        uv run python -m audio_pipeline.pipeline.package $DATASET \\
             $EXTRA_ARGS \\
             --audio_fmt wav \\
             --max_clip 600

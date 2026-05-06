@@ -27,7 +27,6 @@ echo "Shard: ${SLURM_ARRAY_TASK_ID}/$((SLURM_ARRAY_TASK_COUNT-1))"
 echo "Started: $(date '+%Y-%m-%d %H:%M:%S')"
 
 export LD_LIBRARY_PATH=/shared/opt/linux-rocky9-x86_64/gcc-11.4.1/ffmpeg-6.1.1-gynsavpssxgp4ewikkmsa6jswfgi3ycg/lib:$LD_LIBRARY_PATH
-export PYTHONPATH=$PYTHONPATH:$(pwd)
 export POLARS_SKIP_CPU_CHECK=1
 
 module purge
@@ -38,7 +37,7 @@ echo ""
 mkdir -p logs/snr
 
 PYTHONUNBUFFERED=1 \
-uv run src/pipeline/snr.py "$DATASET" \
+uv run python -m audio_pipeline.pipeline.snr "$DATASET" \
     --array_id "$SLURM_ARRAY_TASK_ID" \
     --array_count "$SLURM_ARRAY_TASK_COUNT" \
     "$@"

@@ -38,7 +38,6 @@ PKG_JOB=$(sbatch --parsable \
         cd $(pwd)
         module purge && module load ffmpeg
         export LD_LIBRARY_PATH=/shared/opt/linux-rocky9-x86_64/gcc-11.4.1/ffmpeg-6.1.1-gynsavpssxgp4ewikkmsa6jswfgi3ycg/lib:\${LD_LIBRARY_PATH:-}
-        export PYTHONPATH=\${PYTHONPATH:-}:\$(pwd)
         export POLARS_SKIP_CPU_CHECK=1
 
         echo 'Step 1: Re-packaging with grid-snapped boundaries'
@@ -47,7 +46,7 @@ PKG_JOB=$(sbatch --parsable \
         echo \"Started: \$(date '+%Y-%m-%d %H:%M:%S')\"
 
         PYTHONUNBUFFERED=1 \\
-        uv run python -m src.pipeline.package $DATASET \\
+        uv run python -m audio_pipeline.pipeline.package $DATASET \\
             --audio_fmt wav \\
             --max_clip 600
 
@@ -79,7 +78,6 @@ ALIGN_JOB=$(sbatch --parsable \
         set -euo pipefail
         cd $(pwd)
         module purge
-        export PYTHONPATH=\${PYTHONPATH:-}:\$(pwd)
         export POLARS_SKIP_CPU_CHECK=1
 
         echo 'Step 3: Alignment analysis'
@@ -88,7 +86,7 @@ ALIGN_JOB=$(sbatch --parsable \
         echo \"Started: \$(date '+%Y-%m-%d %H:%M:%S')\"
 
         PYTHONUNBUFFERED=1 \\
-        uv run python -m src.pipeline.vtc_clip_alignment $DATASET
+        uv run python -m audio_pipeline.pipeline.vtc_clip_alignment $DATASET
 
         echo \"Completed: \$(date '+%H:%M:%S')\"
     ")

@@ -1,4 +1,4 @@
-"""Tests for src.core.vad_processing — VAD helpers and single-file processing."""
+"""Tests for audio_pipeline.core.vad_processing — VAD helpers and single-file processing."""
 
 from __future__ import annotations
 
@@ -7,17 +7,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from tests.conftest import requires_tenvad
-
-from src.core.audio import resample_block
-from src.core.vad_processing import (
+from audio_pipeline.core.audio import resample_block
+from audio_pipeline.core.vad_processing import (
     get_runs,
+    process_vad_file,
     runs_to_segments,
     segment_stats,
     vad_error_metadata,
-    process_vad_file,
 )
-
+from tests.conftest import requires_tenvad
 
 # ---------------------------------------------------------------------------
 # get_runs
@@ -48,7 +46,7 @@ class TestGetRuns:
 
     def test_alternating(self):
         # 10 speech, 10 silence, 10 speech
-        flags = np.array([1]*10 + [0]*10 + [1]*10, dtype=np.uint8)
+        flags = np.array([1] * 10 + [0] * 10 + [1] * 10, dtype=np.uint8)
         sp, si = get_runs(flags)
         assert len(sp) == 2
         assert len(si) == 1
@@ -164,11 +162,26 @@ class TestVadErrorMetadata:
     def test_all_keys_present(self):
         row = vad_error_metadata("/a.wav", "err")
         expected_keys = {
-            "success", "path", "file_id", "duration", "original_sr",
-            "speech_ratio", "n_speech_segments", "n_silence_segments",
-            "speech_max", "speech_min", "speech_sum", "speech_num", "speech_avg",
-            "nospch_max", "nospch_min", "nospch_sum", "nospch_num", "nospch_avg",
-            "has_long_segment", "error",
+            "success",
+            "path",
+            "file_id",
+            "duration",
+            "original_sr",
+            "speech_ratio",
+            "n_speech_segments",
+            "n_silence_segments",
+            "speech_max",
+            "speech_min",
+            "speech_sum",
+            "speech_num",
+            "speech_avg",
+            "nospch_max",
+            "nospch_min",
+            "nospch_sum",
+            "nospch_num",
+            "nospch_avg",
+            "has_long_segment",
+            "error",
         }
         assert set(row.keys()) == expected_keys
 

@@ -17,7 +17,6 @@ echo "Dataset: $DATASET"
 echo "Started: $(date '+%Y-%m-%d %H:%M:%S')"
 
 export LD_LIBRARY_PATH=/shared/opt/linux-rocky9-x86_64/gcc-11.4.1/ffmpeg-6.1.1-gynsavpssxgp4ewikkmsa6jswfgi3ycg/lib:$LD_LIBRARY_PATH
-export PYTHONPATH=$PYTHONPATH:$(pwd)
 export POLARS_SKIP_CPU_CHECK=1
 
 module purge
@@ -27,7 +26,7 @@ echo ""
 mkdir -p logs/tests
 
 PYTHONUNBUFFERED=1 \
-uv run python -m src.analysis.snr_vad_diagnostic "$DATASET"
+uv run python -m audio_pipeline.analysis.snr_vad_diagnostic "$DATASET"
 
 EXIT_CODE=$?
 

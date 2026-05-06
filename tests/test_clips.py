@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import pytest
 
-from src.packaging.clips import (
-    CHUNK_STEP_S, CUT_TIERS, Clip, Segment,
-    build_clips as _build_clips_raw,
-    snap_to_grid,
+from audio_pipeline.packaging.clips import (
+    CHUNK_STEP_S,
+    CUT_TIERS,
+    Clip,
+    Segment,
     _build_activity_union,
-    _find_silence_gaps, _compute_iou,
+    _compute_iou,
+    _find_silence_gaps,
+    snap_to_grid,
+)
+from audio_pipeline.packaging.clips import (
+    build_clips as _build_clips_raw,
 )
 
 
@@ -133,7 +139,7 @@ class TestBuildClips:
         """VAD segments overlapping a clip get assigned."""
         vtc = [Segment(onset=100, offset=130, label="FEM")]
         vad = [
-            Segment(onset=95, offset=135),   # overlaps
+            Segment(onset=95, offset=135),  # overlaps
             Segment(onset=900, offset=920),  # different clip
         ]
         clips = build_clips(vtc, vad_segments=vad, file_duration=300, max_clip_s=600)
@@ -155,8 +161,7 @@ class TestBuildClips:
     def test_sum_of_durations_equals_file(self):
         """Total clip duration must equal file duration."""
         vtc = [
-            Segment(onset=i * 20, offset=i * 20 + 15, label="FEM")
-            for i in range(100)
+            Segment(onset=i * 20, offset=i * 20 + 15, label="FEM") for i in range(100)
         ]
         dur = 2500.0
         clips = build_clips(vtc, file_duration=dur, max_clip_s=600)
@@ -207,8 +212,11 @@ class TestBuildClipsSplitting:
         vtc = [Segment(onset=0, offset=2000, label="FEM")]
         vad = [Segment(onset=0, offset=2000)]
         clips = build_clips(
-            vtc, vad_segments=vad, file_duration=2000,
-            max_clip_s=600, split_search_s=120,
+            vtc,
+            vad_segments=vad,
+            file_duration=2000,
+            max_clip_s=600,
+            split_search_s=120,
         )
         assert len(clips) >= 2
         # All audio accounted for
@@ -225,8 +233,10 @@ class TestBuildClipsSplitting:
             for start in range(0, 5000, 20)
         ]
         clips = build_clips(
-            vtc, file_duration=5000,
-            max_clip_s=600, split_search_s=120,
+            vtc,
+            file_duration=5000,
+            max_clip_s=600,
+            split_search_s=120,
         )
         assert len(clips) >= 5
         for c in clips:
@@ -283,8 +293,11 @@ class TestBuildClipsSplitting:
             Segment(onset=620, offset=1200),
         ]
         clips = build_clips(
-            vtc, vad_segments=vad, file_duration=1200,
-            max_clip_s=600, split_search_s=120,
+            vtc,
+            vad_segments=vad,
+            file_duration=1200,
+            max_clip_s=600,
+            split_search_s=120,
         )
         assert len(clips) >= 2
         cut = clips[0].abs_offset
@@ -301,8 +314,11 @@ class TestBuildClipsSplitting:
         ]
         vad = [Segment(onset=0, offset=1200)]
         clips = build_clips(
-            vtc, vad_segments=vad, file_duration=1200,
-            max_clip_s=600, split_search_s=120,
+            vtc,
+            vad_segments=vad,
+            file_duration=1200,
+            max_clip_s=600,
+            split_search_s=120,
         )
         assert len(clips) >= 2
         cut = clips[0].abs_offset
@@ -319,8 +335,11 @@ class TestBuildClipsSplitting:
         ]
         vad = [Segment(onset=0, offset=1200)]
         clips = build_clips(
-            vtc, vad_segments=vad, file_duration=1200,
-            max_clip_s=600, split_search_s=120,
+            vtc,
+            vad_segments=vad,
+            file_duration=1200,
+            max_clip_s=600,
+            split_search_s=120,
         )
         assert len(clips) >= 2
         cut = clips[0].abs_offset
@@ -346,7 +365,9 @@ class TestTierCounts:
             Segment(onset=320, offset=600, label="MAL"),
         ]
         _clips, tier_counts = _build_clips_raw(
-            vtc, file_duration=600, max_clip_s=400,
+            vtc,
+            file_duration=600,
+            max_clip_s=400,
         )
         # At least one cut should have landed in the 280–320 gap
         assert tier_counts["long_union_gap"] + tier_counts["short_union_gap"] >= 1
@@ -357,8 +378,11 @@ class TestTierCounts:
         vtc = [Segment(onset=0, offset=2000, label="FEM")]
         vad = [Segment(onset=0, offset=2000)]
         _clips, tier_counts = _build_clips_raw(
-            vtc, vad_segments=vad, file_duration=2000,
-            max_clip_s=600, split_search_s=120,
+            vtc,
+            vad_segments=vad,
+            file_duration=2000,
+            max_clip_s=600,
+            split_search_s=120,
         )
         assert tier_counts["hard_cut"] >= 1
 
@@ -370,8 +394,11 @@ class TestTierCounts:
             Segment(onset=620, offset=1200),
         ]
         _clips, tier_counts = _build_clips_raw(
-            vtc, vad_segments=vad, file_duration=1200,
-            max_clip_s=600, split_search_s=120,
+            vtc,
+            vad_segments=vad,
+            file_duration=1200,
+            max_clip_s=600,
+            split_search_s=120,
         )
         assert tier_counts["vad_only_gap"] >= 1
 
@@ -444,8 +471,8 @@ class TestClipMetadata:
         clip = Clip(abs_onset=0, abs_offset=100)
         clip.vtc_segments = [
             Segment(onset=10, offset=20, label="FEM"),
-            Segment(onset=25, offset=35, label="MAL"),   # gap = 5s
-            Segment(onset=40, offset=50, label="FEM"),    # gap = 5s
+            Segment(onset=25, offset=35, label="MAL"),  # gap = 5s
+            Segment(onset=40, offset=50, label="FEM"),  # gap = 5s
         ]
         assert clip.mean_vtc_gap == 5.0
 
@@ -508,9 +535,9 @@ class TestPerLabelProperties:
     def test_label_durations(self):
         clip = Clip(abs_onset=0, abs_offset=100)
         clip.vtc_segments = [
-            Segment(onset=10, offset=20, label="FEM"),   # 10s
-            Segment(onset=30, offset=40, label="KCHI"),   # 10s
-            Segment(onset=50, offset=55, label="FEM"),    # 5s
+            Segment(onset=10, offset=20, label="FEM"),  # 10s
+            Segment(onset=30, offset=40, label="KCHI"),  # 10s
+            Segment(onset=50, offset=55, label="FEM"),  # 5s
         ]
         ld = clip.label_durations
         assert abs(ld["FEM"] - 15.0) < 0.01
@@ -520,9 +547,9 @@ class TestPerLabelProperties:
     def test_child_adult_durations(self):
         clip = Clip(abs_onset=0, abs_offset=100)
         clip.vtc_segments = [
-            Segment(onset=10, offset=20, label="FEM"),    # adult 10s
-            Segment(onset=30, offset=50, label="KCHI"),   # child 20s
-            Segment(onset=60, offset=65, label="OCH"),    # child 5s
+            Segment(onset=10, offset=20, label="FEM"),  # adult 10s
+            Segment(onset=30, offset=50, label="KCHI"),  # child 20s
+            Segment(onset=60, offset=65, label="OCH"),  # child 5s
         ]
         assert abs(clip.adult_speech_duration - 10.0) < 0.01
         assert abs(clip.child_speech_duration - 25.0) < 0.01
@@ -539,11 +566,11 @@ class TestPerLabelProperties:
     def test_vad_coverage_by_label(self):
         clip = Clip(abs_onset=0, abs_offset=100)
         clip.vtc_segments = [
-            Segment(onset=10, offset=20, label="FEM"),    # 10s, fully covered
-            Segment(onset=30, offset=50, label="KCHI"),   # 20s, not covered
+            Segment(onset=10, offset=20, label="FEM"),  # 10s, fully covered
+            Segment(onset=30, offset=50, label="KCHI"),  # 20s, not covered
         ]
         clip.vad_segments = [
-            Segment(onset=8, offset=22),   # covers FEM fully
+            Segment(onset=8, offset=22),  # covers FEM fully
         ]
         cov = clip.vad_coverage_by_label()
         assert cov["FEM"] >= 0.95
@@ -613,7 +640,9 @@ class TestBuildClipsGridSnapping:
     def test_boundaries_on_grid(self):
         """All interior boundaries should land on the chunk grid."""
         dur = 3600.0  # 1 hour → ~6 clips
-        vtc = [Segment(onset=i * 60, offset=i * 60 + 50, label="FEM") for i in range(60)]
+        vtc = [
+            Segment(onset=i * 60, offset=i * 60 + 50, label="FEM") for i in range(60)
+        ]
         vad = [Segment(onset=i * 60, offset=i * 60 + 50) for i in range(60)]
         clips = build_clips(vtc, vad, file_duration=dur)
         for clip in clips[:-1]:  # last clip ends at file_duration, not snapped
@@ -636,7 +665,9 @@ class TestBuildClipsGridSnapping:
     def test_no_zero_duration_clips(self):
         """Snapping should never produce a zero-duration clip."""
         dur = 3600.0
-        vtc = [Segment(onset=i * 60, offset=i * 60 + 50, label="FEM") for i in range(60)]
+        vtc = [
+            Segment(onset=i * 60, offset=i * 60 + 50, label="FEM") for i in range(60)
+        ]
         clips = build_clips(vtc, file_duration=dur)
         for clip in clips:
             assert clip.duration > 0, f"Zero-duration clip at {clip.abs_onset}"
@@ -656,13 +687,15 @@ class TestBuildClipsGridSnapping:
     def test_full_coverage(self):
         """Every second of the file is covered — no gaps."""
         dur = 3600.0
-        vtc = [Segment(onset=i * 60, offset=i * 60 + 50, label="FEM") for i in range(60)]
+        vtc = [
+            Segment(onset=i * 60, offset=i * 60 + 50, label="FEM") for i in range(60)
+        ]
         clips = build_clips(vtc, file_duration=dur)
         assert clips[0].abs_onset == 0.0
         assert clips[-1].abs_offset == pytest.approx(dur)
         for i in range(len(clips) - 1):
             assert clips[i].abs_offset == pytest.approx(clips[i + 1].abs_onset), (
-                f"Gap between clip {i} and {i+1}"
+                f"Gap between clip {i} and {i + 1}"
             )
 
     def test_short_file_single_clip(self):

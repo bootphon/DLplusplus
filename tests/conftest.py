@@ -42,13 +42,20 @@ SILENCE = FIXTURE_DIR / "silence.wav"
 SHORT = FIXTURE_DIR / "short.wav"
 
 ALL_FIXTURE_WAVS = [
-    SPEECH_CLEAN, SPEECH_MULTI, SPEECH_SPARSE,
-    SPEECH_LONG, SPEECH_LONG_MULTI,
-    SILENCE, SHORT,
+    SPEECH_CLEAN,
+    SPEECH_MULTI,
+    SPEECH_SPARSE,
+    SPEECH_LONG,
+    SPEECH_LONG_MULTI,
+    SILENCE,
+    SHORT,
 ]
 SPEECH_FIXTURE_WAVS = [
-    SPEECH_CLEAN, SPEECH_MULTI, SPEECH_SPARSE,
-    SPEECH_LONG, SPEECH_LONG_MULTI,
+    SPEECH_CLEAN,
+    SPEECH_MULTI,
+    SPEECH_SPARSE,
+    SPEECH_LONG,
+    SPEECH_LONG_MULTI,
 ]
 
 # ---------------------------------------------------------------------------
@@ -81,7 +88,8 @@ def _tenvad_available() -> bool:
 def _brouhaha_available() -> bool:
     """Return True if Brouhaha + pyannote can be loaded."""
     try:
-        from src.compat import patch_torchaudio
+        from audio_pipeline.compat import patch_torchaudio
+
         patch_torchaudio()
         from brouhaha.pipeline import RegressiveActivityDetectionPipeline  # noqa: F401
         from pyannote.audio import Model  # noqa: F401

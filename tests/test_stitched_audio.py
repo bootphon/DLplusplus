@@ -30,10 +30,10 @@ from tests.conftest import (
 
 # Guard heavy imports — TenVAD may not be available on login nodes.
 if TYPE_CHECKING:
-    from src.core.vad_processing import process_vad_file
+    from audio_pipeline.core.vad_processing import process_vad_file
 
 if _TENVAD_OK:
-    from src.core.vad_processing import process_vad_file
+    from audio_pipeline.core.vad_processing import process_vad_file
 else:
 
     def process_vad_file(args: Any) -> Any:  # type: ignore[misc]
@@ -119,9 +119,9 @@ class TestVadIntegration:
         """Clean speech file → success, some detected speech segments."""
         meta, segs = process_vad_file((speech_clean_wav, 256, 0.5))
         assert meta["success"] is True
-        assert (
-            meta["speech_ratio"] > 0
-        ), f"Expected speech_ratio > 0, got {meta['speech_ratio']:.3f}"
+        assert meta["speech_ratio"] > 0, (
+            f"Expected speech_ratio > 0, got {meta['speech_ratio']:.3f}"
+        )
         assert meta["n_speech_segments"] >= 1
         assert len(segs) >= 1
 
@@ -129,18 +129,18 @@ class TestVadIntegration:
         """Multi-speaker file → success with detectable speech."""
         meta, segs = process_vad_file((speech_multi_wav, 256, 0.5))
         assert meta["success"] is True
-        assert (
-            meta["speech_ratio"] > 0
-        ), f"Expected speech_ratio > 0, got {meta['speech_ratio']:.3f}"
+        assert meta["speech_ratio"] > 0, (
+            f"Expected speech_ratio > 0, got {meta['speech_ratio']:.3f}"
+        )
         assert meta["n_speech_segments"] >= 1
 
     def test_silence_file_low_speech(self, silence_wav: Path):
         """Pure silence → success with near-zero speech ratio."""
         meta, segs = process_vad_file((silence_wav, 256, 0.5))
         assert meta["success"] is True
-        assert (
-            meta["speech_ratio"] < 0.15
-        ), f"Expected speech_ratio < 0.15 for silence, got {meta['speech_ratio']:.3f}"
+        assert meta["speech_ratio"] < 0.15, (
+            f"Expected speech_ratio < 0.15 for silence, got {meta['speech_ratio']:.3f}"
+        )
 
     def test_short_file_no_crash(self, short_wav: Path):
         """Very short file (0.3s) processes without error."""
@@ -166,14 +166,14 @@ class TestVadIntegration:
     def test_output_schema(self, speech_clean_wav: Path):
         """Metadata and segment dicts have all required keys."""
         meta, segs = process_vad_file((speech_clean_wav, 256, 0.5))
-        assert _REQUIRED_META_KEYS <= set(
-            meta.keys()
-        ), f"Missing meta keys: {_REQUIRED_META_KEYS - set(meta.keys())}"
+        assert _REQUIRED_META_KEYS <= set(meta.keys()), (
+            f"Missing meta keys: {_REQUIRED_META_KEYS - set(meta.keys())}"
+        )
         assert len(segs) > 0, "Expected at least one segment"
         for seg in segs:
-            assert _REQUIRED_SEG_KEYS <= set(
-                seg.keys()
-            ), f"Missing seg keys: {_REQUIRED_SEG_KEYS - set(seg.keys())}"
+            assert _REQUIRED_SEG_KEYS <= set(seg.keys()), (
+                f"Missing seg keys: {_REQUIRED_SEG_KEYS - set(seg.keys())}"
+            )
             assert seg["onset"] < seg["offset"]
             assert seg["duration"] > 0
             assert seg["onset"] >= 0
@@ -189,9 +189,9 @@ class TestVadIntegration:
         """27s dense speech file → high speech ratio."""
         meta, segs = process_vad_file((speech_long_wav, 256, 0.5))
         assert meta["success"] is True
-        assert (
-            meta["speech_ratio"] > 0
-        ), f"Expected speech_ratio > 0 for 27s dense speech, got {meta['speech_ratio']:.3f}"
+        assert meta["speech_ratio"] > 0, (
+            f"Expected speech_ratio > 0 for 27s dense speech, got {meta['speech_ratio']:.3f}"
+        )
         assert meta["n_speech_segments"] >= 1
         assert len(segs) >= 1
 
@@ -199,9 +199,9 @@ class TestVadIntegration:
         """63s multi-speaker file → high speech ratio with many segments."""
         meta, segs = process_vad_file((speech_long_multi_wav, 256, 0.5))
         assert meta["success"] is True
-        assert (
-            meta["speech_ratio"] > 0
-        ), f"Expected speech_ratio > 0 for 63s multi-speaker, got {meta['speech_ratio']:.3f}"
+        assert meta["speech_ratio"] > 0, (
+            f"Expected speech_ratio > 0 for 63s multi-speaker, got {meta['speech_ratio']:.3f}"
+        )
         assert meta["n_speech_segments"] >= 2
         assert len(segs) >= 2
 

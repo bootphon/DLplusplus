@@ -30,10 +30,9 @@ export POLARS_SKIP_CPU_CHECK=1
 module purge
 module load ffmpeg llvm
 
-export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 PYTHONUNBUFFERED=1 \
-uv run src/pipeline/vad.py "$DATASET" \
+uv run python -m audio_pipeline.pipeline.vad "$DATASET" \
     --workers "$SLURM_CPUS_PER_TASK" \
     "$@"
 

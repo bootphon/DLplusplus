@@ -1,17 +1,16 @@
-"""Tests for src.core.intervals — pure interval arithmetic."""
+"""Tests for audio_pipeline.core.intervals — pure interval arithmetic."""
 
 from __future__ import annotations
 
 import pytest
 
-from src.core.intervals import (
+from audio_pipeline.core.intervals import (
     compute_iou,
     intervals_to_pairs,
     intervals_to_segments,
     merge_pairs,
     total_duration,
 )
-
 
 # ---------------------------------------------------------------------------
 # merge_pairs

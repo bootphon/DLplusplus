@@ -517,7 +517,7 @@ for batch in loader:
 
 ```bash
 # 1. Standardize the manifest
-uv run python -m src.pipeline.normalize --dataset my_corpus --path-col audio_path
+uv run python -m audio_pipeline.pipeline.normalize --dataset my_corpus --path-col audio_path
 
 # 2. Run feature extraction via SLURM
 sbatch slurm/vad.slurm my_corpus                   # CPU multiprocessing

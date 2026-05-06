@@ -176,7 +176,7 @@ by an audit of all files in the repo.
 
 **D9 additional work (2026-03-28)**:
 - Moved `set_seeds()` from `src/core/vad_processing.py` → `src/utils.py`.
-  All pipeline scripts and tests updated to import from `src.utils`.
+  All pipeline scripts and tests updated to import from `audio_pipeline.utils`.
 - Updated `src/plotting/compare.py` to use `lazy_pyplot()` / `save_figure()`.
 - Extracted plotting code (~230 LOC) from `src/pipeline/vtc_clip_alignment.py`
   into `src/plotting/clip_alignment.py`.

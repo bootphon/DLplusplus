@@ -9,20 +9,19 @@ Tests are split into two groups:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
-import os
 import pytest
 
-from src.pipeline.snr import pool_snr
-
-from tests.conftest import _BROUHAHA_OK, requires_brouhaha
+from audio_pipeline.pipeline.snr import pool_snr
+from tests.conftest import _BROUHAHA_OK
 
 # Guard heavy imports so the module can be *collected* on login nodes.
 if _BROUHAHA_OK:
-    from src.pipeline.snr import _extract_snr
-    from src.utils import set_seeds
+    from audio_pipeline.pipeline.snr import _extract_snr
+    from audio_pipeline.utils import set_seeds
 
 
 # ======================================================================
@@ -110,9 +109,9 @@ class TestPoolSnr:
 _MODEL_ROOT = Path(
     os.environ["MODEL_ROOT"]
     if "MODEL_ROOT" in os.environ
-    else Path.home() / ".cache/dlpluplus"
+    else Path.home() / ".cache/dlplusplus"
 )
-_BROUHAHA_MODEL = _MODEL_ROOT / "brouhaha/best.ckpt
+_BROUHAHA_MODEL = _MODEL_ROOT / "brouhaha/best.ckpt"
 
 
 def _brouhaha_model_available() -> bool:
@@ -134,10 +133,12 @@ class TestExtractSnr:
     def _load_pipeline(self):
         """Load the Brouhaha pipeline once per test class."""
         import torch
-        from src.compat import patch_torchaudio
+
+        from audio_pipeline.compat import patch_torchaudio
+
         patch_torchaudio()
-        from pyannote.audio import Model
         from brouhaha.pipeline import RegressiveActivityDetectionPipeline
+        from pyannote.audio import Model
 
         set_seeds(42)
         model = Model.from_pretrained(_BROUHAHA_MODEL, strict=False)
@@ -222,10 +223,12 @@ class TestSnrRoundTrip:
     @pytest.fixture(autouse=True)
     def _load_pipeline(self):
         import torch
-        from src.compat import patch_torchaudio
+
+        from audio_pipeline.compat import patch_torchaudio
+
         patch_torchaudio()
-        from pyannote.audio import Model
         from brouhaha.pipeline import RegressiveActivityDetectionPipeline
+        from pyannote.audio import Model
 
         set_seeds(42)
         model = Model.from_pretrained(_BROUHAHA_MODEL, strict=False)
@@ -266,10 +269,12 @@ class TestSnrReproducibility:
     @pytest.fixture(autouse=True)
     def _load_pipeline(self):
         import torch
-        from src.compat import patch_torchaudio
+
+        from audio_pipeline.compat import patch_torchaudio
+
         patch_torchaudio()
-        from pyannote.audio import Model
         from brouhaha.pipeline import RegressiveActivityDetectionPipeline
+        from pyannote.audio import Model
 
         set_seeds(42)
         model = Model.from_pretrained(_BROUHAHA_MODEL, strict=False)
@@ -316,6 +321,7 @@ class TestSnrReproducibility:
 
             assert step_a == step_b, f"{wav.name}: step {step_a} vs {step_b}"
             np.testing.assert_array_equal(
-                snr_a, snr_b,
+                snr_a,
+                snr_b,
                 err_msg=f"{wav.name}: SNR arrays differ",
             )

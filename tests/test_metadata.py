@@ -1,4 +1,4 @@
-"""Tests for src.core.metadata — VTC metadata row builders."""
+"""Tests for audio_pipeline.core.metadata — VTC metadata row builders."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import math
 
 import pytest
 
-from src.core.metadata import (
+from audio_pipeline.core.metadata import (
     _EMPTY_VTC_META,
     vtc_error_row,
     vtc_meta_row,

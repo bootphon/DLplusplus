@@ -11,7 +11,6 @@ echo "Node: $(hostname)"
 echo "Started: $(date)"
 echo ""
 
-export PYTHONPATH=$PYTHONPATH:$(pwd)
 export POLARS_SKIP_CPU_CHECK=1
 
 module purge

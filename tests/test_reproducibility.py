@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 
 from tests.conftest import (
-    _TORCHCODEC_OK,
     _TENVAD_OK,
+    _TORCHCODEC_OK,
     requires_tenvad,
     requires_torchcodec,
 )
@@ -26,8 +26,8 @@ if _TORCHCODEC_OK:
     from segma.inference import apply_model_on_audio
 
 if _TENVAD_OK:
-    from src.core.vad_processing import process_vad_file
-    from src.utils import set_seeds
+    from audio_pipeline.core.vad_processing import process_vad_file
+    from audio_pipeline.utils import set_seeds
 
 
 # -----------------------------------------------------------------------
@@ -58,14 +58,14 @@ class TestVadReproducibility:
             "n_speech_segments",
             "n_silence_segments",
         ):
-            assert (
-                meta_a[key] == meta_b[key]
-            ), f"Metadata mismatch on '{key}': {meta_a[key]} vs {meta_b[key]}"
+            assert meta_a[key] == meta_b[key], (
+                f"Metadata mismatch on '{key}': {meta_a[key]} vs {meta_b[key]}"
+            )
 
         # Segment-level exact match
-        assert len(segs_a) == len(
-            segs_b
-        ), f"Segment count mismatch: {len(segs_a)} vs {len(segs_b)}"
+        assert len(segs_a) == len(segs_b), (
+            f"Segment count mismatch: {len(segs_a)} vs {len(segs_b)}"
+        )
         for i, (sa, sb) in enumerate(zip(segs_a, segs_b)):
             assert sa == sb, f"Segment {i} differs: {sa} vs {sb}"
 
@@ -81,9 +81,9 @@ class TestVadReproducibility:
             meta_b, segs_b = process_vad_file(args)
 
             assert meta_a["success"] is True
-            assert len(segs_a) == len(
-                segs_b
-            ), f"{wav.stem}: segment count {len(segs_a)} vs {len(segs_b)}"
+            assert len(segs_a) == len(segs_b), (
+                f"{wav.stem}: segment count {len(segs_a)} vs {len(segs_b)}"
+            )
             for i, (sa, sb) in enumerate(zip(segs_a, segs_b)):
                 assert sa == sb, f"{wav.stem} segment {i}: {sa} vs {sb}"
 
@@ -157,7 +157,7 @@ class TestVtcReproducibility:
         from segma.models import Models
         from segma.utils.encoders import MultiLabelEncoder
 
-        from src.utils import set_seeds as _set_seeds
+        from audio_pipeline.utils import set_seeds as _set_seeds
 
         cfg_path = "VTC-2.0/model/config.yml"
         ckpt_path = "VTC-2.0/model/best.ckpt"
@@ -210,16 +210,15 @@ class TestVtcReproducibility:
             )
 
         assert torch.equal(logits_a, logits_b), (
-            f"Logit mismatch: max diff = "
-            f"{(logits_a - logits_b).abs().max().item():.6e}"
+            f"Logit mismatch: max diff = {(logits_a - logits_b).abs().max().item():.6e}"
         )
 
     def test_segments_deterministic(self, good_book_wavs: list[Path]):
         """Full VTC pipeline (forward + threshold) yields identical segments."""
         import torch
 
-        from src.core.intervals import intervals_to_segments
-        from src.pipeline.vtc import _apply_threshold
+        from audio_pipeline.core.intervals import intervals_to_segments
+        from audio_pipeline.pipeline.vtc import _apply_threshold
 
         wav = good_book_wavs[0]
 
@@ -246,8 +245,8 @@ class TestVtcReproducibility:
         segs_a = _run()
         segs_b = _run()
 
-        assert len(segs_a) == len(
-            segs_b
-        ), f"Segment count: {len(segs_a)} vs {len(segs_b)}"
+        assert len(segs_a) == len(segs_b), (
+            f"Segment count: {len(segs_a)} vs {len(segs_b)}"
+        )
         for i, (sa, sb) in enumerate(zip(segs_a, segs_b)):
             assert sa == sb, f"VTC segment {i}: {sa} vs {sb}"

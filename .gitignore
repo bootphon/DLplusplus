@@ -14,3 +14,5 @@ models
 *.bak
 
 .vscode/
+.venv/
+.zed/

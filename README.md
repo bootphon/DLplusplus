@@ -68,11 +68,11 @@ Run an individual pipeline step on a folder of audio files:
 
 ```bash
 # Speaker diarization (VTC)
-uv run python -m src.pipeline.vtc my_data \
+uv run python -m audio_pipeline.pipeline.vtc my_data \
     --manifest manifests/my_dataset.csv
 
 # Voice activity detection (VAD)
-uv run python -m src.pipeline.vad my_data \
+uv run python -m audio_pipeline.pipeline.vad my_data \
     --manifest manifests/my_dataset.csv
 ```
 
@@ -110,11 +110,11 @@ Steps 1–4 run **in parallel** as independent jobs. Step 5 (Package) depends on
 
 | Step | Module | Resource | Description |
 |------|--------|----------|-------------|
-| **1. VAD** | `src.pipeline.vad` | CPU | TenVAD speech activity detection |
-| **2. VTC** | `src.pipeline.vtc` | GPU | BabyHuBERT/segma speaker diarization (KCHI, OCH, MAL, FEM) |
-| **3. SNR** | `src.pipeline.snr` | GPU | Brouhaha per-frame SNR & C50 extraction |
-| **4. ESC** | `src.pipeline.esc` | GPU | PANNs CNN14 environmental sound classification |
-| **5. Package** | `src.pipeline.package` | CPU | Clip tiling + WebDataset shards + dashboards |
+| **1. VAD** | `audio_pipeline.pipeline.vad` | CPU | TenVAD speech activity detection |
+| **2. VTC** | `audio_pipeline.pipeline.vtc` | GPU | BabyHuBERT/segma speaker diarization (KCHI, OCH, MAL, FEM) |
+| **3. SNR** | `audio_pipeline.pipeline.snr` | GPU | Brouhaha per-frame SNR & C50 extraction |
+| **4. ESC** | `audio_pipeline.pipeline.esc` | GPU | PANNs CNN14 environmental sound classification |
+| **5. Package** | `audio_pipeline.pipeline.package` | CPU | Clip tiling + WebDataset shards + dashboards |
 
 **Resume support:** VAD and VTC save checkpoints. Interrupted jobs can be resubmitted and will skip already-completed files.
 
@@ -227,10 +227,10 @@ The `.json` metadata contains:
 
 | Module | Purpose |
 |--------|---------|
-| `src.plotting.compare` | VAD vs VTC comparison (IoU, precision, recall, diagnostics) |
-| `src.pipeline.normalize` | Standardize external manifests into `manifests/{dataset}.csv` |
-| `src.pipeline.preflight` | Estimate dataset size, GPU needs, and wall-clock time |
-| `src.pipeline.segment_snr` | Post-hoc per-VTC-segment SNR/C50 averaging |
+| `audio_pipeline.plotting.compare` | VAD vs VTC comparison (IoU, precision, recall, diagnostics) |
+| `audio_pipeline.pipeline.normalize` | Standardize external manifests into `manifests/{dataset}.csv` |
+| `audio_pipeline.pipeline.preflight` | Estimate dataset size, GPU needs, and wall-clock time |
+| `audio_pipeline.pipeline.segment_snr` | Post-hoc per-VTC-segment SNR/C50 averaging |
 
 ---
 

@@ -17,7 +17,21 @@ dependencies = [
     "ten-vad>=1.0.6.8",
     "panns-inference>=0.1.1",
     "webdataset>=1.0.2",
+    "pydantic-settings>=2.14.0",
 ]
+
+[project.scripts]
+make-manifest = "audio_pipeline.make_manifest:main"
+download-models = "audio_pipeline.download_models:main"
+
+[build-system]
+requires = ["uv_build>=0.5.15"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "src"
+module-name = ["audio_pipeline", "dataloader"]
+
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -35,6 +49,7 @@ dev = [
     "pytest>=9.0.2",
     "huggingface-hub>=0.35.0",
     "pygithub>=2.9.1",
+    "ipython>=9.13.0",
 ]
 
 [tool.uv]

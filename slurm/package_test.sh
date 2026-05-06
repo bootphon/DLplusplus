@@ -78,8 +78,8 @@ echo "  1b. VTC (no_regions)  : $VTC_JOB"
 PKG_JOB=$(sbatch --parsable \
     --dependency=afterok:${VAD_JOB}:${VTC_JOB} \
     --job-name=package \
-    --output=logs/package/pkg_%j.out \
-    --error=logs/package/pkg_%j.err \
+    --output=/home/%u/logs/dlplusplus/package/pkg_%j.out \
+    --error=/home/%u/logs/dlplusplus/package/pkg_%j.err \
     --cpus-per-task=4 \
     --mem=32G \
     --time=02:00:00 \
@@ -87,7 +87,6 @@ PKG_JOB=$(sbatch --parsable \
     --wrap="
         set -euo pipefail
         module purge && module load ffmpeg
-        export PYTHONPATH=\${PYTHONPATH:-}:\$(pwd)
         export POLARS_SKIP_CPU_CHECK=1
 
         echo 'Package pipeline'
@@ -98,7 +97,7 @@ PKG_JOB=$(sbatch --parsable \
         ## Tiles full audio into clips, cutting only at silence gaps
         ## All VAD and VTC onsets/offsets should be shifted to relative timestamps
         PYTHONUNBUFFERED=1 \\
-        uv run python -m src.pipeline.package $DATASET \\
+        uv run python -m audio_pipeline.pipeline.package $DATASET \\
             --sample $SAMPLE \\
             --audio_fmt flac \\
             --max_clip 600
@@ -106,7 +105,7 @@ PKG_JOB=$(sbatch --parsable \
         echo ''
         echo 'Extracting sample clips for validation...'
         PYTHONUNBUFFERED=1 \\
-        uv run python -m src.packaging.listener \\
+        uv run python -m audio_pipeline.packaging.listener \\
             output/$DATASET/shards \\
             -n 50 --seed 42 --wav --diverse
 

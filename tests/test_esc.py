@@ -15,14 +15,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from src.pipeline.esc import (
-    CATEGORIES,
+from audio_pipeline.pipeline.esc import (
     _SPEECH_INDICES,
+    CATEGORIES,
     map_to_categories,
     pool_esc,
     pool_to_categories,
 )
-
 
 # ======================================================================
 # map_to_categories — pure numpy, no GPU needed
@@ -155,7 +154,7 @@ class TestClipNoiseIntegration:
 
     def test_esc_profile_none_when_no_data(self):
         """esc_profile should be None when no ESC data attached."""
-        from src.packaging.clips import Clip
+        from audio_pipeline.packaging.clips import Clip
 
         clip = Clip(abs_onset=0.0, abs_offset=10.0)
         assert clip.esc_profile is None
@@ -163,7 +162,7 @@ class TestClipNoiseIntegration:
 
     def test_esc_profile_with_data(self):
         """esc_profile should return mean per category."""
-        from src.packaging.clips import Clip
+        from audio_pipeline.packaging.clips import Clip
 
         cats = CATEGORIES
         n = len(cats)
@@ -192,6 +191,7 @@ def _panns_available() -> bool:
     try:
         import torch
         from panns_inference import AudioTagging
+
         # Just check the import works — don't actually load the model
         return True
     except Exception:
@@ -214,7 +214,8 @@ class TestExtractPanns:
         import torch
         from panns_inference import AudioTagging
 
-        from src.utils import set_seeds
+        from audio_pipeline.utils import set_seeds
+
         set_seeds(42)
 
         dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -222,7 +223,7 @@ class TestExtractPanns:
 
     def test_returns_correct_shape(self, speech_clean_wav: Path):
         """extract_panns returns (n_windows, 527) float32 array."""
-        from src.pipeline.esc import extract_panns
+        from audio_pipeline.pipeline.esc import extract_panns
 
         probs, step = extract_panns(self.at, speech_clean_wav, window_s=10.0)
 
@@ -235,7 +236,7 @@ class TestExtractPanns:
 
     def test_probabilities_in_range(self, speech_clean_wav: Path):
         """All probabilities should be in [0, 1]."""
-        from src.pipeline.esc import extract_panns
+        from audio_pipeline.pipeline.esc import extract_panns
 
         probs, _ = extract_panns(self.at, speech_clean_wav, window_s=10.0)
 
@@ -244,7 +245,7 @@ class TestExtractPanns:
 
     def test_speech_detected_in_speech_file(self, speech_clean_wav: Path):
         """Speech class (index 0) should have high probability for speech audio."""
-        from src.pipeline.esc import extract_panns
+        from audio_pipeline.pipeline.esc import extract_panns
 
         probs, _ = extract_panns(self.at, speech_clean_wav, window_s=10.0)
 
@@ -254,7 +255,7 @@ class TestExtractPanns:
 
     def test_silence_file(self, fixture_dir: Path):
         """Silence file should have low probabilities across categories."""
-        from src.pipeline.esc import extract_panns
+        from audio_pipeline.pipeline.esc import extract_panns
 
         silence_wav = fixture_dir / "silence.wav"
         if not silence_wav.exists():
@@ -264,12 +265,14 @@ class TestExtractPanns:
 
         # Mean across all non-speech categories should be low
         non_speech_mean = float(np.mean(probs[:, 16:]))
-        assert non_speech_mean < 0.3, f"Non-speech mean={non_speech_mean} too high for silence"
+        assert non_speech_mean < 0.3, (
+            f"Non-speech mean={non_speech_mean} too high for silence"
+        )
 
     def test_deterministic(self, speech_clean_wav: Path):
         """Two runs with same seed should give identical results."""
-        from src.pipeline.esc import extract_panns
-        from src.utils import set_seeds
+        from audio_pipeline.pipeline.esc import extract_panns
+        from audio_pipeline.utils import set_seeds
 
         set_seeds(42)
         p1, _ = extract_panns(self.at, speech_clean_wav, window_s=10.0)
@@ -281,7 +284,7 @@ class TestExtractPanns:
 
     def test_full_pipeline_npz_format(self, speech_clean_wav: Path, tmp_path: Path):
         """End-to-end: extract → pool → save → reload → verify."""
-        from src.pipeline.esc import extract_panns, pool_to_categories
+        from audio_pipeline.pipeline.esc import extract_panns, pool_to_categories
 
         probs, step = extract_panns(self.at, speech_clean_wav, window_s=10.0)
         pooled, cats, pool_step = pool_to_categories(probs, step, pool_window_s=1.0)
