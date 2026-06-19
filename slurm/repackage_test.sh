@@ -32,6 +32,7 @@ PKG_JOB=$(sbatch --parsable \
     --cpus-per-task=8 \
     --mem=64G \
     --time=04:00:00 \
+    --export=ALL \
     --partition=erc-dupoux,gpu-p1 \
     --wrap="
         set -euo pipefail
@@ -59,6 +60,7 @@ echo "  1. Package        : $PKG_JOB"
 rm -rf "${DATASET_ROOT}/vtc_clips"
 
 VTC_CLIPS_JOB=$(sbatch --parsable \
+    --export=ALL \
     --dependency=afterok:${PKG_JOB} \
     --array=0-5 \
     slurm/vtc_clips.slurm "$DATASET_NAME")
@@ -70,6 +72,7 @@ ALIGN_JOB=$(sbatch --parsable \
     --job-name=align \
     --output="/home/%u/logs/dlplusplus/tests/align_%j.out" \
     --cpus-per-task=4 \
+    --export=ALL \
     --mem=32G \
     --time=01:00:00 \
     --partition=erc-dupoux,gpu-p1 \

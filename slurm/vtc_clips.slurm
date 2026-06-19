@@ -7,6 +7,7 @@
 #SBATCH --partition=erc-dupoux,gpu-p1
 #SBATCH --gres=gpu:1
 #SBATCH --array=0-5
+#SBATCH --export=ALL
 
 DATASET="$1"
 shift 1  # remaining args passed through to vtc_on_clips.py
@@ -24,12 +25,7 @@ echo "Job: ${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}  Node: $(hostname)"
 echo "Shard: ${SLURM_ARRAY_TASK_ID}/$((SLURM_ARRAY_TASK_COUNT-1))"
 echo "Started: $(date '+%Y-%m-%d %H:%M:%S')"
 
-export LD_LIBRARY_PATH=/shared/opt/linux-rocky9-x86_64/gcc-11.4.1/ffmpeg-6.1.1-gynsavpssxgp4ewikkmsa6jswfgi3ycg/lib:$LD_LIBRARY_PATH
 export POLARS_SKIP_CPU_CHECK=1
-
-module purge
-module load ffmpeg
-module load git-lfs
 
 echo ""
 

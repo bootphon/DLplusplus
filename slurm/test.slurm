@@ -3,6 +3,7 @@
 #SBATCH --output=/home/%u/logs/dlplusplus/tests/pytest_%j.out
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
+#SBATCH --export=ALL
 #SBATCH --time=00:30:00
 #SBATCH --partition=erc-dupoux,gpu-p1
 

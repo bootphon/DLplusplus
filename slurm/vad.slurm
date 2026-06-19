@@ -3,6 +3,7 @@
 #SBATCH --output=/home/%u/logs/dlplusplus/vad/ten_%j.out
 #SBATCH --cpus-per-task=48
 #SBATCH --mem=128G
+#SBATCH --export=ALL
 #SBATCH --time=24:00:00
 #SBATCH --partition=erc-dupoux,gpu-p1
 

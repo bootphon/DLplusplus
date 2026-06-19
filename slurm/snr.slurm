@@ -3,6 +3,7 @@
 #SBATCH --output=/home/%u/logs/dlplusplus/snr/snr_%A_%a.out
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
+#SBATCH --export=ALL
 #SBATCH --time=24:00:00
 #SBATCH --partition=erc-dupoux,gpu-p1
 #SBATCH --gres=gpu:1

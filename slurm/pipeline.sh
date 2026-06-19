@@ -118,6 +118,7 @@ PKG_JOB=$(sbatch --parsable \
     --output=/home/%u/logs/dlplusplus/package/pkg_%j.out \
     --cpus-per-task=8 \
     --mem=64G \
+    --export=ALL \
     --time=04:00:00 \
     --partition=erc-dupoux,gpu-p1 \
     --wrap="

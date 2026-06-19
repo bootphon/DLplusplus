@@ -13,9 +13,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 FIXTURES="$REPO_ROOT/tests/fixtures"
 
-module load ffmpeg/
-export LD_LIBRARY_PATH="/shared/opt/linux-rocky9-x86_64/gcc-11.4.1/ffmpeg-6.1.1-gynsavpssxgp4ewikkmsa6jswfgi3ycg/lib:${LD_LIBRARY_PATH:-}"
-
 FULL=0
 for arg in "$@"; do [[ "$arg" == "--full" ]] && FULL=1; done
 
