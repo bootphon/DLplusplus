@@ -36,8 +36,8 @@ echo ""
 
 PYTHONUNBUFFERED=1 \
 uv run python -m audio_pipeline.pipeline.vtc "$DATASET" \
-    --array_id "$SLURM_ARRAY_TASK_ID" \
-    --array_count "$SLURM_ARRAY_TASK_COUNT" \
+    --array-id "$SLURM_ARRAY_TASK_ID" \
+    --array-count "$SLURM_ARRAY_TASK_COUNT" \
     "$@"
 
 EXIT_CODE=$?

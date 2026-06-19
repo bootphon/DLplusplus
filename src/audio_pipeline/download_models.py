@@ -9,7 +9,9 @@ Set MODEL_ROOT to override the default cache location:
     MODEL_ROOT=/my/path uv run python -m audio_pipeline.download_models
 """
 
+import argparse
 import os
+import shutil
 import urllib.request
 from pathlib import Path
 
@@ -41,7 +43,7 @@ HF_MODELS: dict[str, dict] = {
 
 GITHUB_FILES: dict[str, dict] = {
     "vtc": {
-        "base_url": "https://github.com/LAAC-LSCP/VTC/tree/main",
+        "base_url": "https://raw.githubusercontent.com/LAAC-LSCP/VTC/main",
         "files": [
             "thresholds/f1.toml",
             "thresholds/hp.toml",
@@ -113,6 +115,19 @@ def fetch_github_files(name: str, meta: dict) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-f",
+        "--force-download",
+        action="store_true",
+        help="Clear cache, and force re-download !!",
+    )
+
+    argv = parser.parse_args()
+
+    if argv.force_download:
+        shutil.rmtree(MODEL_ROOT)
+
     print(f"MODEL_ROOT: {MODEL_ROOT}\n")
 
     for name, meta in HF_MODELS.items():

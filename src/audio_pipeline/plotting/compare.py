@@ -324,7 +324,12 @@ def plot_dashboard(
         ]:
             if "file_total" in grp.columns and grp.height > 0:
                 vals = grp.filter(pl.col("file_total") < p99)["file_total"].to_numpy()
-                ax.hist(vals, bins=40, alpha=0.6, label=name, color=color, density=True)
+                vals = vals[np.isfinite(vals)]
+                if len(vals) > 0:
+                    ax.hist(
+                        vals, bins=40, alpha=0.6, label=name, color=color, density=True
+                    )
+
         ax.set_xlabel(f"Duration (0\u2013{p99:.0f}s)")
         ax.legend(fontsize=8)
     ax.set_title("Duration (High vs Low IoU)")
@@ -338,22 +343,24 @@ def plot_dashboard(
         ]:
             if grp.height > 0 and "file_total" in grp.columns:
                 ratio = (grp["vad_dur"] / grp["file_total"]).to_numpy()
-                ax.hist(
-                    ratio, bins=40, alpha=0.6, label=name, color=color, density=True
-                )
+                ratio = ratio[np.isfinite(ratio)]
+                if len(ratio) > 0:
+                    ax.hist(
+                        ratio, bins=40, alpha=0.6, label=name, color=color, density=True
+                    )
         ax.set_xlabel("VAD speech ratio")
         ax.legend(fontsize=8)
     ax.set_title("Speech Ratio (High vs Low IoU)")
 
     # Threshold distribution
     ax = axes[1, 2]
-    if "vtc_threshold" in results.columns:
-        thresholds = results["vtc_threshold"].drop_nulls().drop_nans().to_numpy()
+    if "vtc_threshold_preset" in results.columns:
+        thresholds = results["vtc_threshold_preset"].drop_nulls().drop_nans().to_numpy()
         ax.hist(thresholds, bins=30, color="#FF6692", edgecolor="white", linewidth=0.3)
         ax.axvline(
             0.5, color="gray", linestyle="--", linewidth=1, label="default (0.5)"
         )
-        median_val = results["vtc_threshold"].drop_nulls().drop_nans().mean()
+        median_val = results["vtc_threshold_preset"].drop_nulls().drop_nans().mean()
         median_t: float = (
             float(median_val) if isinstance(median_val, (int, float)) else 0.0
         )
@@ -371,7 +378,7 @@ def plot_dashboard(
         ax.text(
             0.5,
             0.5,
-            "No vtc_threshold data",
+            "No vtc_threshold_preset data",
             ha="center",
             va="center",
             transform=ax.transAxes,

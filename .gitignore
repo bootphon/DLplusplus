@@ -16,3 +16,4 @@ models
 .vscode/
 .venv/
 .zed/
+prompt.md

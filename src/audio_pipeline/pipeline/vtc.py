@@ -467,7 +467,7 @@ def entrypoint() -> None:
     )
     parser.add_argument(
         "--config",
-        default=MODEL_ROOT / "vtc/model/config.yml",
+        default=MODEL_ROOT / "vtc/model/config.toml",
         help=f"segma model config (default: {MODEL_ROOT / 'vtc/model/config.yml'})",
     )
     parser.add_argument(
@@ -476,24 +476,24 @@ def entrypoint() -> None:
         help=f"segma model checkpoint (default: {MODEL_ROOT / 'vtc/model/best.ckpt'})",
     )
     parser.add_argument(
-        "--threshold_path",
-        default=MODEL_ROOT / "thresholds/f1.toml",
+        "--thresholds-path",
+        default=MODEL_ROOT / "vtc/thresholds/f1.toml",
         help="Sigmoid threshold for VTC classification (default: f1)",
     )
     parser.add_argument(
-        "--min_duration_on_s",
+        "--min-duration-on-s",
         type=float,
         default=0.1,
         help="Remove segments shorter than this (default: 0.1s)",
     )
     parser.add_argument(
-        "--min_duration_off_s",
+        "--min-duration-off-s",
         type=float,
         default=0.3,
         help="Merge same-label segments with gap < this (default: 0.3s)",
     )
     parser.add_argument(
-        "--batch_size",
+        "--batch-size",
         type=int,
         default=0,
         help=(
@@ -502,7 +502,7 @@ def entrypoint() -> None:
         ),
     )
     parser.add_argument(
-        "--save_logits",
+        "--save-logits",
         action="store_true",
         help="Save per-file logits to output/{dataset}/logits/",
     )
@@ -513,12 +513,12 @@ def entrypoint() -> None:
         help="Device for inference (default: cuda)",
     )
     parser.add_argument(
-        "--array_id",
+        "--array-id",
         type=int,
         help="SLURM array task ID",
     )
     parser.add_argument(
-        "--array_count",
+        "--array-count",
         type=int,
         help="Total SLURM array tasks",
     )

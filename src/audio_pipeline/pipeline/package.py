@@ -70,7 +70,7 @@ def _run_comparison(ds, has_vad: bool) -> None:
         vtc_meta_files = sorted(vtc_meta_dir.glob("*.parquet"))
         if vtc_meta_files:
             vtc_meta_thresh = pl.read_parquet(vtc_meta_files).select(
-                "uid", "vtc_threshold"
+                "uid", "vtc_threshold_preset"
             )
 
     low_thresh = 0.3
