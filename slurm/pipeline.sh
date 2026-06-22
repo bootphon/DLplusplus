@@ -36,8 +36,6 @@ done
 EXTRA_ARGS=""
 [[ -n "$SAMPLE" ]] && EXTRA_ARGS="--sample $SAMPLE"
 
-VTC_THRESHOLD=0.5          # fixed sigmoid threshold — no adaptive sweep
-
 mkdir -p ${HOME}/logs/dlplusplus/{vad,vtc,snr,esc,package}
 
 # ---------- Preflight: auto-detect resources ------------------------------
@@ -71,7 +69,6 @@ echo "║  sample=${SAMPLE:-all}"
 echo "║  GPU: ${GPU_NAME} (${GPU_VRAM_GB} GB VRAM)"
 echo "║  VTC: batch=${VTC_BATCH_SIZE}  shards=${VTC_ARRAY_COUNT}"
 echo "║  SNR: shards=${SNR_ARRAY_COUNT}  ESC: shards=${ESC_ARRAY_COUNT}"
-echo "║  VTC threshold=${VTC_THRESHOLD}  (fixed, no sweep)"
 echo "║  VAD + VTC + SNR + ESC run in parallel"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
@@ -88,8 +85,7 @@ VTC_ARRAY="0-$((VTC_ARRAY_COUNT - 1))"
 VTC_JOB=$(sbatch --parsable \
     --array="${VTC_ARRAY}" \
     slurm/vtc.slurm "$DATASET" \
-        --threshold "$VTC_THRESHOLD" \
-        --batch_size "$VTC_BATCH_SIZE" \
+        --batch-size "$VTC_BATCH_SIZE" \
         $EXTRA_ARGS)
 
 echo "  2. VTC            : $VTC_JOB  (array ${VTC_ARRAY}, batch=${VTC_BATCH_SIZE})"

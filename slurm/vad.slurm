@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=vad_ten
 #SBATCH --output=/home/%u/logs/dlplusplus/vad/ten_%j.out
-#SBATCH --cpus-per-task=48
+#SBATCH --cpus-per-task=32
 #SBATCH --mem=128G
 #SBATCH --export=ALL
 #SBATCH --time=24:00:00
@@ -32,9 +32,7 @@ module load ffmpeg llvm
 
 
 PYTHONUNBUFFERED=1 \
-uv run python -m audio_pipeline.pipeline.vad "$DATASET" \
-    --workers "$SLURM_CPUS_PER_TASK" \
-    "$@"
+uv run python -m audio_pipeline.pipeline.vad "$DATASET" "$@"
 
 EXIT_CODE=$?
 

@@ -70,7 +70,6 @@ VTC_JOB=$(sbatch --parsable \
     --array=0 \
     slurm/vtc.slurm "$DATASET_NAME" \
         --no_regions \
-        --threshold "$THRESHOLD" \
         --sample "$SAMPLE")
 
 echo "  1b. VTC (no_regions)  : $VTC_JOB"

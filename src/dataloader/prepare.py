@@ -28,7 +28,6 @@ Python usage::
 
 The config's ``pipeline.*`` fields are forwarded to the pipeline scripts:
 - vad_threshold   → vad.py --threshold
-- vtc_threshold   → vtc.py --threshold
 - max_clip_s      → package.py --max_clip
 - split_search_s  → package.py --split_search
 - audio_fmt       → package.py --audio_fmt
@@ -276,8 +275,6 @@ def prepare(
                 f"0-{vtc_array_count - 1}",
                 str(slurm_dir / "vtc.slurm"),
                 dataset,
-                "--threshold",
-                str(p.vtc_threshold),
                 "--batch_size",
                 str(vtc_batch_size),
             ]

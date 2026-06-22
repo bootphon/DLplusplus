@@ -43,7 +43,6 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 
-
 # ──────────────────────────────────────────────────────────────────
 # GPU specs
 # ──────────────────────────────────────────────────────────────────
@@ -159,10 +158,12 @@ def query_local_gpu() -> GPUSpec | None:
 
         if not torch.cuda.is_available():
             return None
-        name_raw = torch.cuda.get_device_name(0)
+
+        idx = torch.cuda.current_device()
+        name_raw = torch.cuda.get_device_name(idx)
         name = _normalise_gpu_name(name_raw)
-        props = torch.cuda.get_device_properties(0)
-        vram_gb = props.total_mem // (1024**3)
+        props = torch.cuda.get_device_properties(idx)
+        vram_gb = props.total_memory // (1024**3)
         count = torch.cuda.device_count()
         return GPUSpec(name=name, vram_gb=vram_gb, count=count)
     except Exception:
@@ -179,12 +180,12 @@ def query_local_gpu() -> GPUSpec | None:
 # These were derived empirically on H100 NVL and A40.
 _VTC_BATCH_TABLE: list[tuple[int, int]] = [
     # (min_vram_gb, batch_size)
-    (80, 512),   # H100 NVL / A100-80GB — plenty of headroom
-    (48, 256),   # A40 / L40 — comfortable
-    (32, 192),   # V100-32GB
-    (24, 128),   # A30 / RTX 3090 / RTX 4090
-    (16, 64),    # T4 / smaller
-    (0, 32),     # fallback
+    (80, 512),  # H100 NVL / A100-80GB — plenty of headroom
+    (48, 256),  # A40 / L40 — comfortable
+    (32, 192),  # V100-32GB
+    (24, 128),  # A30 / RTX 3090 / RTX 4090
+    (16, 64),  # T4 / smaller
+    (0, 32),  # fallback
 ]
 
 
@@ -218,6 +219,7 @@ def recommend_esc_batch_size(vram_gb: int) -> int:
 # ──────────────────────────────────────────────────────────────────
 # Dataset statistics
 # ──────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class DatasetStats:
@@ -268,6 +270,7 @@ def gather_dataset_stats(paths: list[str]) -> DatasetStats:
 # ──────────────────────────────────────────────────────────────────
 # Resource plan
 # ──────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class ResourcePlan:
@@ -380,8 +383,9 @@ def plan_resources(
             f"VTC={vtc_array}, SNR={snr_array}, ESC={esc_array}"
         )
 
-    notes.append(f"Total GPU tasks: {vtc_array + snr_array + esc_array} "
-                 f"/ {gpu.count} available")
+    notes.append(
+        f"Total GPU tasks: {vtc_array + snr_array + esc_array} / {gpu.count} available"
+    )
 
     return ResourcePlan(
         gpu_name=gpu.name,

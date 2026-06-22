@@ -14,7 +14,7 @@ Usage:
 """
 
 import argparse
-import multiprocessing as mp
+import os
 import sys
 import time
 import warnings
@@ -92,22 +92,7 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Resolve workers + NFS I/O safeguard
     # ------------------------------------------------------------------
-    workers = args.workers or mp.cpu_count()
-
-    wavs_preview = [
-        Path(p) for p in manifest_df["path"].drop_nulls().head(20).to_list()
-    ]
-    if wavs_preview:
-        sample_sizes = [w.stat().st_size for w in wavs_preview[:10] if w.exists()]
-        if sample_sizes:
-            median_size_mb = sorted(sample_sizes)[len(sample_sizes) // 2] / 1e6
-            if median_size_mb < 10 and workers > 16:
-                old_w = workers
-                workers = min(workers, 16)
-                print(
-                    f"  NFS guard: {median_size_mb:.0f} MB median, "
-                    f"workers {old_w} -> {workers}"
-                )
+    workers = args.workers or len(os.sched_getaffinity(0))
 
     print(f"  workers  : {workers}")
     wavs = [Path(p) for p in manifest_df["path"].drop_nulls().to_list()]

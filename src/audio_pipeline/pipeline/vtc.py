@@ -16,7 +16,6 @@ Paths are derived from the dataset name:
 
 Usage:
     python -m audio_pipeline.pipeline.vtc chunks30
-    python -m audio_pipeline.pipeline.vtc chunks30 --threshold 0.5
 
 SLURM array:
     python -m audio_pipeline.pipeline.vtc chunks30 \\
@@ -79,6 +78,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("vtc")
 
+MODEL_ROOT = Path(
+    os.environ["MODEL_ROOT"]
+    if "MODEL_ROOT" in os.environ
+    else Path.home() / ".cache/dlplusplus"
+)
+
 
 def load_thresholds(thresholds_path: Path) -> dict:
     """Load thresholds from toml file."""
@@ -118,9 +123,9 @@ def _apply_threshold(
 
 def main(
     dataset: str,
-    config: str = "VTC-2.0/model/config.yml",
-    checkpoint: str = "VTC-2.0/model/best.ckpt",
-    thresholds_path: str = "VTC-2.0/thresholds/f1.toml",
+    config: Path = MODEL_ROOT / "vtc/model/config.toml",
+    checkpoint: Path = MODEL_ROOT / "vtc/model/best.ckpt",
+    thresholds_path: Path = MODEL_ROOT / "vtc/thresholds/f1.toml",
     min_duration_on_s: float = 0.1,
     min_duration_off_s: float = 0.3,
     batch_size: int = 0,
@@ -446,18 +451,12 @@ def main(
 
 
 def entrypoint() -> None:
-    MODEL_ROOT = Path(
-        os.environ["MODEL_ROOT"]
-        if "MODEL_ROOT" in os.environ
-        else Path.home() / ".cache/dlplusplus"
-    )
     parser = argparse.ArgumentParser(
         description="VTC inference with fixed per-file thresholding.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
             "  python -m audio_pipeline.pipeline.vtc chunks30\n"
-            "  python -m audio_pipeline.pipeline.vtc chunks30 --threshold 0.5\n"
             "  python -m audio_pipeline.pipeline.vtc chunks30 --sample 500\n"
         ),
     )
@@ -468,7 +467,7 @@ def entrypoint() -> None:
     parser.add_argument(
         "--config",
         default=MODEL_ROOT / "vtc/model/config.toml",
-        help=f"segma model config (default: {MODEL_ROOT / 'vtc/model/config.yml'})",
+        help=f"segma model config (default: {MODEL_ROOT / 'vtc/model/config.toml'})",
     )
     parser.add_argument(
         "--checkpoint",
