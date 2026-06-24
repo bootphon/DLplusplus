@@ -4,10 +4,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --export=ALL
-#SBATCH --time=24:00:00
+#SBATCH --time=04:00:00
 #SBATCH --partition=erc-dupoux,gpu-p1
-#SBATCH --gres=gpu:1
-#SBATCH --array=0-1
 
 DATASET="$1"
 shift 1  # remaining args passed through

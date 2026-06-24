@@ -621,8 +621,8 @@ def save_master_quality(
 
     # [2,0] Per-segment SNR & C50 overlapping histograms
     ax = axes[2, 0]
-    seg_snr = segment_df["snr_during"].drop_nulls().to_numpy()
-    seg_c50 = segment_df["c50_during"].drop_nulls().to_numpy()
+    seg_snr = segment_df["snr_during"].drop_nulls().drop_nans().to_numpy()
+    seg_c50 = segment_df["c50_during"].drop_nulls().drop_nans().to_numpy()
     _hist_pair(ax, seg_snr, seg_c50)
     ax.set_title("Per-Segment SNR & C50\n(VTC speech frames only)", fontsize=10)
 

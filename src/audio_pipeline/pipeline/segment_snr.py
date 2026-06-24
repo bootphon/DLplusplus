@@ -1,21 +1,18 @@
-#!/usr/bin/env python3
-"""Per-VTC-segment SNR & C50 extraction using Brouhaha.
+"""Per-VTC-segment SNR & C50 from pre-computed Brouhaha frames.
 
-For each audio file, runs Brouhaha to get per-frame (~16 ms) SNR and C50,
-then averages the raw frames falling within each VTC segment's [onset, offset].
+Reads raw per-frame arrays written by ``pipeline/snr.py``
+(``snr/{uid}.npz``: fields ``snr``, ``c50``, ``step_s``) and averages the
+frames that fall within each VTC segment's ``[onset, offset]``.
 
-Requires VTC segments to already exist in output/{dataset}/vtc_merged/.
+No GPU or model required.  Must run after both VTC and SNR complete.
 
 Output:
-    output/{dataset}/segment_snr.parquet
+    output/{dataset}/segment_snr/shard_N.parquet
         columns: uid, onset, offset, label, snr_mean, c50_mean
 
 Usage:
     python -m audio_pipeline.pipeline.segment_snr seedlings_10
     sbatch slurm/segment_snr.slurm seedlings_10
-
-SLURM array support:
-    sbatch --array=0-1 slurm/segment_snr.slurm seedlings_10
 """
 
 import argparse
@@ -27,12 +24,6 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from audio_pipeline.core.brouhaha import (
-    DEFAULT_MODEL,
-    ensure_model,
-    extract_brouhaha,
-    load_brouhaha_pipeline,
-)
 from audio_pipeline.utils import (
     add_sample_argument,
     get_dataset_paths,
@@ -40,7 +31,6 @@ from audio_pipeline.utils import (
     load_manifest,
     log_benchmark,
     sample_manifest,
-    set_seeds,
     shard_list,
 )
 
@@ -51,8 +41,6 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 logger = logging.getLogger("segment_snr")
-
-_DEFAULT_MODEL = DEFAULT_MODEL
 
 
 def _load_vtc_segments(output_dir: Path) -> pl.DataFrame:
@@ -83,10 +71,8 @@ def _segment_means(
             snr_mean = None
             c50_mean = None
         else:
-            snr_slice = raw_snr[i0:i1]
-            c50_slice = raw_c50[i0:i1]
-            snr_mean = round(float(np.mean(snr_slice)), 2)
-            c50_mean = round(float(np.mean(c50_slice)), 2)
+            snr_mean = round(float(np.mean(raw_snr[i0:i1])), 2)
+            c50_mean = round(float(np.mean(raw_c50[i0:i1])), 2)
         results.append(
             {
                 "uid": seg["uid"],
@@ -102,32 +88,27 @@ def _segment_means(
 
 def main(
     dataset: str,
-    model_path: Path = _DEFAULT_MODEL,
-    device: str = "cuda",
     array_id: int | None = None,
     array_count: int | None = None,
     sample: int | float | None = None,
-):
-    import warnings
-
-    warnings.filterwarnings("ignore", message=".*TF32.*deprecated.*")
-    set_seeds(42)
-
+) -> None:
     paths = get_dataset_paths(dataset)
     logger.info(f"Dataset: {dataset}")
     logger.info(f"  output    : {paths.output}")
 
-    # Load VTC segments
+    snr_dir = paths.output / "snr"
+    if not snr_dir.exists():
+        raise FileNotFoundError(
+            f"SNR frames not found: {snr_dir}\nRun pipeline/snr.py first."
+        )
+
     all_vtc = _load_vtc_segments(paths.output)
     logger.info(f"  VTC segments: {len(all_vtc):,} total")
 
-    # Load manifest for audio paths
     manifest_df = load_manifest(paths.manifest)
     manifest_df = sample_manifest(manifest_df, sample)
 
-    resolved_paths = manifest_df["path"].drop_nulls().to_list()
-    file_ids = [Path(p).stem for p in resolved_paths]
-    uid_to_path = dict(zip(file_ids, resolved_paths))
+    file_ids = [Path(p).stem for p in manifest_df["path"].drop_nulls().to_list()]
 
     if array_id is not None and array_count is not None:
         file_ids = shard_list(file_ids, array_id, array_count)
@@ -135,41 +116,27 @@ def main(
 
     shard_id = array_id if array_id is not None else 0
 
-    # Load model
-    from audio_pipeline.compat import patch_torchaudio
-
-    patch_torchaudio()
-    ensure_model(model_path)
-    pipeline = load_brouhaha_pipeline(model_path, device)
-
-    # Resolve frame step for logging
-    seg_model = pipeline._segmentation
-    if hasattr(seg_model.model, "receptive_field"):
-        step_ms = float(seg_model.model.receptive_field.step) * 1000
-    elif hasattr(seg_model.model, "introspection"):
-        step_ms = float(seg_model.model.introspection.frames.step) * 1000  # type: ignore
-    else:
-        step_ms = 16.9
-    logger.info(f"  frame step: {step_ms:.1f} ms")
-
-    # Process files
     all_rows: list[dict] = []
     n_errors = 0
+    n_missing = 0
     total = len(file_ids)
     t0 = time.time()
     log_every = max(1, total // 20)
 
     for i, uid in enumerate(file_ids, 1):
-        audio_path = Path(uid_to_path[uid])
+        npz_path = snr_dir / f"{uid}.npz"
+        if not npz_path.exists():
+            n_missing += 1
+            logger.warning(f"{uid}: SNR npz not found, skipping")
+            continue
         try:
-            _vad, raw_snr, raw_c50, step_s = extract_brouhaha(pipeline, audio_path)
+            npz = np.load(npz_path)
+            raw_snr = npz["snr"].astype(np.float32)
+            raw_c50 = npz["c50"].astype(np.float32)
+            step_s = float(npz["step_s"])
 
-            # Get VTC segments for this file
-            file_segs = all_vtc.filter(pl.col("uid") == uid)
-            seg_dicts = file_segs.to_dicts()
-
-            rows = _segment_means(raw_snr, raw_c50, step_s, seg_dicts)
-            all_rows.extend(rows)
+            seg_dicts = all_vtc.filter(pl.col("uid") == uid).to_dicts()
+            all_rows.extend(_segment_means(raw_snr, raw_c50, step_s, seg_dicts))
 
             if i % log_every == 0 or i == total:
                 elapsed = time.time() - t0
@@ -189,7 +156,6 @@ def main(
             n_errors += 1
             logger.warning(f"{uid}: {e}")
 
-    # Save results
     out_dir = paths.output / "segment_snr"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"shard_{shard_id}.parquet"
@@ -197,9 +163,7 @@ def main(
     if all_rows:
         df = pl.DataFrame(all_rows)
         df.write_parquet(out_path)
-        logger.info(f"Saved {len(df):,} segment SNR rows to {out_path}")
-
-        # Summary
+        logger.info(f"Saved {len(df):,} segment rows → {out_path}")
         snr_vals = df["snr_mean"].drop_nulls()
         c50_vals = df["c50_mean"].drop_nulls()
         if len(snr_vals) > 0:
@@ -215,10 +179,14 @@ def main(
     else:
         logger.info("No segments processed.")
 
+    if n_missing > 0:
+        logger.warning(f"{n_missing}/{total} files had no SNR npz")
+
     wall = time.time() - t0
-    logger.info(f"{'─' * 50}")
+    logger.info("─" * 50)
     logger.info(
-        f"Shard {shard_id}: {total - n_errors}/{total} files, {n_errors} errors"
+        f"Shard {shard_id}: {total - n_errors - n_missing}/{total} ok  "
+        f"{n_errors} errors  {n_missing} missing npz"
     )
     logger.info(f"Wall time: {hhmmss(wall)}")
 
@@ -235,7 +203,7 @@ def main(
 
 def entrypoint() -> None:
     parser = argparse.ArgumentParser(
-        description="Per-VTC-segment SNR & C50 via Brouhaha.",
+        description="Per-VTC-segment SNR & C50 from pre-computed Brouhaha frames.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
@@ -244,17 +212,6 @@ def entrypoint() -> None:
         ),
     )
     parser.add_argument("dataset", help="Dataset name")
-    parser.add_argument(
-        "--model_path",
-        default=_DEFAULT_MODEL,
-        help=f"Brouhaha model checkpoint (default: {_DEFAULT_MODEL})",
-    )
-    parser.add_argument(
-        "--device",
-        default="cuda",
-        choices=["cuda", "cpu"],
-        help="Device for inference (default: cuda)",
-    )
     parser.add_argument("--array_id", type=int, help="SLURM array task ID")
     parser.add_argument("--array_count", type=int, help="Total SLURM array tasks")
     add_sample_argument(parser)

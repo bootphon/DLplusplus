@@ -36,7 +36,7 @@ done
 EXTRA_ARGS=""
 [[ -n "$SAMPLE" ]] && EXTRA_ARGS="--sample $SAMPLE"
 
-mkdir -p ${HOME}/logs/dlplusplus/{vad,vtc,snr,esc,package}
+mkdir -p ${HOME}/logs/dlplusplus/{vad,vtc,snr,esc,segment_snr,package}
 
 # ---------- Preflight: auto-detect resources ------------------------------
 
@@ -56,6 +56,7 @@ SNR_ARRAY_COUNT=2
 ESC_ARRAY_COUNT=2
 GPU_NAME="unknown"
 GPU_VRAM_GB=0
+JOB_THROTLE=1
 
 # Source preflight output
 if [[ -n "$PREFLIGHT_ENV" ]]; then
@@ -69,7 +70,7 @@ echo "║  sample=${SAMPLE:-all}"
 echo "║  GPU: ${GPU_NAME} (${GPU_VRAM_GB} GB VRAM)"
 echo "║  VTC: batch=${VTC_BATCH_SIZE}  shards=${VTC_ARRAY_COUNT}"
 echo "║  SNR: shards=${SNR_ARRAY_COUNT}  ESC: shards=${ESC_ARRAY_COUNT}"
-echo "║  VAD + VTC + SNR + ESC run in parallel"
+echo "║  VAD + VTC + SNR + ESC in parallel → segment_snr → Package"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -81,6 +82,10 @@ VAD_JOB=$(sbatch --parsable \
 echo "  1. VAD            : $VAD_JOB"
 
 VTC_ARRAY="0-$((VTC_ARRAY_COUNT - 1))"
+if [ -n "$JOB_THROTLE" ]; then
+    VTC_ARRAY="${VTC_ARRAY}%${JOB_THROTLE}"
+fi
+
 
 VTC_JOB=$(sbatch --parsable \
     --array="${VTC_ARRAY}" \
@@ -91,6 +96,9 @@ VTC_JOB=$(sbatch --parsable \
 echo "  2. VTC            : $VTC_JOB  (array ${VTC_ARRAY}, batch=${VTC_BATCH_SIZE})"
 
 SNR_ARRAY="0-$((SNR_ARRAY_COUNT - 1))"
+if [ -n "$JOB_THROTLE" ]; then
+    SNR_ARRAY="${SNR_ARRAY}%${JOB_THROTLE}"
+fi
 
 SNR_JOB=$(sbatch --parsable \
     --array="${SNR_ARRAY}" \
@@ -99,17 +107,33 @@ SNR_JOB=$(sbatch --parsable \
 echo "  3. SNR (Brouhaha) : $SNR_JOB  (array ${SNR_ARRAY})"
 
 ESC_ARRAY="0-$((ESC_ARRAY_COUNT - 1))"
+if [ -n "$JOB_THROTLE" ]; then
+    ESC_ARRAY="${ESC_ARRAY}%${JOB_THROTLE}"
+fi
 
 ESC_JOB=$(sbatch --parsable \
-    --array="${ESC_ARRAY}" \
+    --array="${ESC_ARRAY}%1" \
     slurm/esc.slurm "$DATASET" $EXTRA_ARGS)
 
 echo "  4. ESC (PANNs)  : $ESC_JOB  (array ${ESC_ARRAY})"
 
-# ---------- Step 5: Package + Compare + Dashboard (after all) -------------
+# ---------- Step 5: segment_snr (CPU, after VTC + SNR) -------------------
+SEGSNR_ARRAY="0-$((SNR_ARRAY_COUNT - 1))"
+if [ -n "$JOB_THROTLE" ]; then
+    SEGSNR_ARRAY="${SEGSNR_ARRAY}%${JOB_THROTLE}"
+fi
+
+SEGSNR_JOB=$(sbatch --parsable \
+    --dependency=afterok:${VTC_JOB}:${SNR_JOB} \
+    --array="${SEGSNR_ARRAY}" \
+    slurm/segment_snr.slurm "$DATASET" $EXTRA_ARGS)
+
+echo "  5. Segment SNR   : $SEGSNR_JOB  (array ${SEGSNR_ARRAY})"
+
+# ---------- Step 6: Package + Compare + Dashboard (after all) -------------
 
 PKG_JOB=$(sbatch --parsable \
-    --dependency=afterok:${VAD_JOB}:${VTC_JOB}:${SNR_JOB}:${ESC_JOB} \
+    --dependency=afterok:${VAD_JOB}:${VTC_JOB}:${SNR_JOB}:${ESC_JOB}:${SEGSNR_JOB} \
     --job-name=pkg_dash \
     --output=/home/%u/logs/dlplusplus/package/pkg_%j.out \
     --cpus-per-task=8 \
@@ -140,12 +164,13 @@ PKG_JOB=$(sbatch --parsable \
         echo \"Completed: \$(date '+%H:%M:%S')\"
     ")
 
-echo "  5. Package+Dash   : $PKG_JOB"
+echo "  6. Package+Dash   : $PKG_JOB"
 
 echo ""
-echo "Chain: [VAD($VAD_JOB) | VTC($VTC_JOB) | SNR($SNR_JOB) | ESC($ESC_JOB)] → Package($PKG_JOB)"
+echo "Chain: [VAD($VAD_JOB) | VTC($VTC_JOB) | SNR($SNR_JOB) | ESC($ESC_JOB)]"
+echo "       → SegSNR($SEGSNR_JOB) → Package($PKG_JOB)"
 echo ""
 echo "Monitor : squeue -u \$USER"
-echo "Cancel  : scancel $VAD_JOB $VTC_JOB $SNR_JOB $ESC_JOB $PKG_JOB"
+echo "Cancel  : scancel $VAD_JOB $VTC_JOB $SNR_JOB $ESC_JOB $SEGSNR_JOB $PKG_JOB"
 echo "Pkg log : ${HOME}/logs/dlplusplus/package/pkg_\${PKG_JOB}.out"
 echo ""
