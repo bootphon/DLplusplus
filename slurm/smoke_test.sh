@@ -96,7 +96,7 @@ if [[ $KEEP_WORKSPACE -eq 1 ]]; then
     echo ""
     echo "Workspace kept for inspection: $WORKSPACE"
     echo "  Full logs : $WORKSPACE/logs/"
-    echo "  Outputs   : $WORKSPACE/output/$DATASET/"
+    echo "  Outputs   : $WORKSPACE/outputs/$DATASET/"
 fi
 echo "============================================================================"
 

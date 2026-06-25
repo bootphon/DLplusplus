@@ -58,7 +58,7 @@ class ProjectPaths(BaseSettings):
 
         _subs: dict[str, str] = {
             "manifests_dir": "manifests",
-            "output_dir": "output",
+            "output_dir": "outputs",
             "figures_dir": "figures",
             "logs_dir": "logs",
         }
@@ -73,11 +73,11 @@ class ProjectPaths(BaseSettings):
         return data
 
     def ensure(
-        self, *, kinds: t.Iterable[t.Literal["output", "figures", "logs"]] = ()
+        self, *, kinds: t.Iterable[t.Literal["outputs", "figures", "logs"]] = ()
     ) -> t.Self:
         """Create the named roots on disk if missing."""
         mapping: dict[str, Path] = {
-            "output": self.output_dir,
+            "outputs": self.output_dir,
             "figures": self.figures_dir,
             "logs": self.logs_dir,
         }

@@ -10,6 +10,8 @@
 #SBATCH --array=0-2
 
 DATASET="$1"
+MODEL_ROOT="${MODEL_ROOT:-$HOME/.cache/dlplusplus}"
+
 shift 1  # remaining args passed through to vtc.py
 
 if [ -z "$DATASET" ]; then
@@ -34,6 +36,7 @@ PYTHONUNBUFFERED=1 \
 uv run python -m audio_pipeline.pipeline.vtc "$DATASET" \
     --array-id "$SLURM_ARRAY_TASK_ID" \
     --array-count "$SLURM_ARRAY_TASK_COUNT" \
+    --thresholds-path "${MODEL_ROOT}/vtc/thresholds/hp.toml" \
     "$@"
 
 EXIT_CODE=$?

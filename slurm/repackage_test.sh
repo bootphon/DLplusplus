@@ -13,7 +13,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
 DATASET_NAME="${1:?Usage: bash slurm/repackage_test.sh DATASET}"
-DATASET_ROOT="${DLPP_WORKSPACE}/output/${DATASET_NAME}"
+DATASET_ROOT="${DLPP_WORKSPACE}/outputs/${DATASET_NAME}"
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"

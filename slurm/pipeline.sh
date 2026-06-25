@@ -9,8 +9,6 @@
 #    - VTC batch size (tuned to GPU VRAM)
 #    - Array counts for VTC / SNR / Noise (tuned to dataset size + GPU count)
 #
-#  Both VAD and VTC use a fixed 0.5 sigmoid threshold.
-#
 #  For threshold-sensitivity analysis, see:
 #    bash slurm/threshold_analysis.sh seedlings_1 --sample 0.05
 #

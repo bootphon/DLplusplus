@@ -14,7 +14,7 @@ set -euo pipefail
 DATASET_NAME="seedlings_1"
 SAMPLE="0.01"
 THRESHOLD="0.50"
-DATASET_ROOT="${DLPP_WORKSPACE}/output/${DATASET_NAME}"
+DATASET_ROOT="${DLPP_WORKSPACE}/outputs/${DATASET_NAME}"
 
 FORCE=false
 if [[ "${1:-}" == "--force" ]]; then
