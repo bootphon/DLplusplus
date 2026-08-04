@@ -17,6 +17,14 @@ from pathlib import Path
 
 from huggingface_hub import hf_hub_download
 
+from vtc_inference.ressources import (
+    MODEL_TO_REVISION,
+    ModelNotFoundError,
+    resolve_model_config_path,
+    resolve_model_path,
+    resolve_thresholds_path,
+)
+
 # ── Cache root ────────────────────────────────────────────────────────
 MODEL_ROOT = Path(
     os.environ["MODEL_ROOT"]
@@ -31,25 +39,10 @@ HF_MODELS: dict[str, dict] = {
         "rev": "99bf97b13fd4dda2434a6f7c50855933076f2937",
         "files": ["best.ckpt"],
     },
-    "vtc": {
-        "repo_id": "coml/VTC-2",
-        "rev": "6b1a95508302edc14c50f670cd9a30d66fa4f88a",
-        "files": [
-            "model/best.ckpt",
-            "model/config.toml",
-        ],
-    },
 }
 
-GITHUB_FILES: dict[str, dict] = {
-    "vtc": {
-        "base_url": "https://raw.githubusercontent.com/LAAC-LSCP/VTC/main",
-        "files": [
-            "thresholds/f1.toml",
-            "thresholds/hp.toml",
-        ],
-    },
-}
+# ── VTC version to pre-download ───────────────────────────────────────
+VTC_VERSION = "2.2"
 
 
 # ── HuggingFace downloader ────────────────────────────────────────────
@@ -86,7 +79,38 @@ def fetch_hf_model(name: str, meta: dict) -> None:
     commit_file.write_text(meta["rev"])
 
 
-# ── GitHub raw downloader ─────────────────────────────────────────────
+def fetch_vtc_model(version: str = VTC_VERSION) -> None:
+    """Pre-download VTC model files into MODEL_ROOT using vtc_inference resolvers.
+
+    Raises:
+        ModelNotFoundError: if version is not in vtc_inference.ressources.MODEL_TO_REVISION.
+    """
+    rev = MODEL_TO_REVISION.get(version)
+    if rev is None:
+        raise ModelNotFoundError(
+            f"Unknown VTC version {version!r}. Known: {list(MODEL_TO_REVISION)}"
+        )
+
+    target = MODEL_ROOT / "vtc"
+    commit_file = target / "commit"
+    if commit_file.exists() and commit_file.read_text().strip() == rev:
+        print(f"[vtc]  version {version} ({rev[:8]})  already up to date, skipping.")
+        return
+
+    print(f"\n[vtc]  Fetching version {version} (rev {rev[:8]}):")
+    artifacts = [
+        (resolve_model_path(version), "model/best.ckpt"),
+        (resolve_model_config_path(version), "model/config.toml"),
+        (resolve_thresholds_path("f1", version), "thresholds/f1.toml"),
+        (resolve_thresholds_path("hp", version), "thresholds/hp.toml"),
+    ]
+    for src, rel in artifacts:
+        dest = target / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(src.read_bytes())
+        print(f"        ✓  vtc/{rel}")
+
+    commit_file.write_text(rev)
 
 
 def fetch_github_files(name: str, meta: dict) -> None:
@@ -133,8 +157,7 @@ def main() -> None:
     for name, meta in HF_MODELS.items():
         fetch_hf_model(name, meta)
 
-    for name, meta in GITHUB_FILES.items():
-        fetch_github_files(name, meta)
+    fetch_vtc_model()
 
     print("\nDone.")
 

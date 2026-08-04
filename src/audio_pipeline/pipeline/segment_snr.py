@@ -24,6 +24,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
+from audio_pipeline.core.vtc_io import load_vtc_segments as _load_vtc_shards
 from audio_pipeline.utils import (
     add_sample_argument,
     get_dataset_paths,
@@ -44,14 +45,7 @@ logger = logging.getLogger("segment_snr")
 
 
 def _load_vtc_segments(output_dir: Path) -> pl.DataFrame:
-    """Load all VTC segments from vtc_merged/*.parquet."""
-    vtc_dir = output_dir / "vtc_merged"
-    if not vtc_dir.exists():
-        raise FileNotFoundError(f"VTC segments not found: {vtc_dir}")
-    files = sorted(vtc_dir.glob("*.parquet"))
-    if not files:
-        raise FileNotFoundError(f"No parquet files in {vtc_dir}")
-    return pl.concat([pl.read_parquet(f) for f in files])
+    return _load_vtc_shards(output_dir, kind="merged")
 
 
 def _segment_means(

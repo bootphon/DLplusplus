@@ -3,7 +3,7 @@ name = "dlplusplus"
 version = "0.1.0"
 description = "DL++ — Feature processing and data loading for child-centered long-form audio"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastexcel>=0.19.0",
     "matplotlib>=3.10.6",
@@ -12,7 +12,7 @@ dependencies = [
     "polars>=1.0",
     "pyarrow>=23.0.1",
     "brouhaha",
-    "segma",
+    "vtc",
     "soundfile>=0.13",
     "ten-vad>=1.0.6.8",
     "panns-inference>=0.1.1",
@@ -25,12 +25,12 @@ make-manifest = "audio_pipeline.make_manifest:main"
 download-models = "audio_pipeline.download_models:main"
 
 [build-system]
-requires = ["uv_build>=0.5.15"]
+requires = ["uv_build>=0.5.15,<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-root = "src"
-module-name = ["audio_pipeline", "dataloader"]
+module-name = ["audio_pipeline"]
 
 
 [tool.pytest.ini_options]
@@ -42,7 +42,8 @@ addopts = ["-v", "--tb=short", "-rA", "--durations=10"]
 
 [tool.uv.sources]
 brouhaha = { git = "https://github.com/marianne-m/brouhaha-vad", rev = "1e175a9dee0f4d7c618653d64796a45405a768e1" }
-segma = { git = "https://github.com/arxaqapi/segma", rev = "9c398231011a7b16b76cf7be8e99c8b4dbc7ac35" }
+# branch: api-migration
+vtc = { git = "https://github.com/nhamilakis/VTC", rev = "e8e819f781e4a25b1f24859d9af5d73f9e5e8df5" }
 
 [dependency-groups]
 dev = [
