@@ -72,6 +72,8 @@ _SEG_SCHEMA = {
     "label": pl.String,
 }
 
+_META_COLS = ["uid", "vtc_threshold_preset", "vtc_speech_dur", "vtc_n_segments", "vtc_label_counts", "error"]
+
 
 def _load_rttm(path: Path) -> pl.DataFrame:
     """Read one RTTM file into uid/onset/offset/duration/label schema."""
@@ -259,15 +261,22 @@ def main(
     meta_path = meta_dir / f"shard_{shard_id}.parquet"
 
     completed_uids = load_completed_ids(meta_dir, id_column="uid", pattern="shard_*.parquet")
-    prev_meta_df = pl.read_parquet(meta_path) if meta_path.exists() else None
+    if meta_path.exists():
+        _pm = pl.read_parquet(meta_path)
+        if "uid" in _pm.columns:
+            prev_meta_df = _pm.select([c for c in _META_COLS if c in _pm.columns])
+        else:
+            prev_meta_df = None
+    else:
+        prev_meta_df = None
 
-    # Subtract error UIDs so failed files are retried on the next run.
     if completed_uids and meta_dir.is_dir():
-        meta_files = sorted(meta_dir.glob("shard_*.parquet"))
-        if meta_files:
-            all_meta = pl.concat([pl.read_parquet(f) for f in meta_files])
-            error_uids = set(all_meta.filter(pl.col("error") != "")["uid"].to_list())
-            completed_uids -= error_uids
+        error_uids: set[str] = set()
+        for f in sorted(meta_dir.glob("shard_*.parquet")):
+            df = pl.read_parquet(f)
+            if "uid" in df.columns and "error" in df.columns:
+                error_uids.update(df.filter(pl.col("error") != "")["uid"].to_list())
+        completed_uids -= error_uids
 
     file_ids_to_process = [uid for uid in file_ids if uid not in completed_uids]
     if len(file_ids_to_process) < len(file_ids):
@@ -299,9 +308,12 @@ def main(
     prev_seg_path = paths.output / "vtc_raw" / f"shard_{shard_id}.parquet"
     if prev_seg_path.exists() and completed_uids:
         prev_seg_df = pl.read_parquet(prev_seg_path)
-        kept = prev_seg_df.filter(~pl.col("uid").is_in(list(rttm_uids)))
-        parts = [p for p in [kept, raw_df] if not p.is_empty()]
-        seg_df = pl.concat(parts, how="vertical") if parts else empty_seg
+        if all(c in prev_seg_df.columns for c in _SEG_SCHEMA):
+            kept = prev_seg_df.filter(~pl.col("uid").is_in(list(rttm_uids)))
+            parts = [p for p in [kept, raw_df] if not p.is_empty()]
+            seg_df = pl.concat(parts, how="vertical") if parts else empty_seg
+        else:
+            seg_df = raw_df
     else:
         seg_df = raw_df
 

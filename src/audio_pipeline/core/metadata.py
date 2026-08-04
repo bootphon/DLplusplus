@@ -17,7 +17,7 @@ _EMPTY_VTC_META = dict(
 
 def vtc_error_row(uid: str, error: str) -> dict:
     """Metadata row for a file that errored during VTC inference."""
-    return {**_EMPTY_VTC_META, "uid": uid, "error": error}
+    return {"uid": uid, **_EMPTY_VTC_META, "error": error}
 
 
 def vtc_meta_row(uid: str, threshold_preset: str, uid_raw_df: pl.DataFrame) -> dict:
