@@ -21,7 +21,7 @@ import argparse
 import logging
 import os
 import sys
-import tempfile
+import shutil
 import time
 from pathlib import Path
 from typing import Literal
@@ -32,6 +32,7 @@ from audio_pipeline.compat import patch_torchaudio
 
 patch_torchaudio()
 
+from torchcodec.decoders import AudioDecoder as _AudioDecoder  # noqa: E402
 from vtc_inference import run_vtc  # noqa: E402
 
 from audio_pipeline.core.metadata import vtc_error_row, vtc_meta_row  # noqa: E402
@@ -89,6 +90,132 @@ def _load_rttm(path: Path) -> pl.DataFrame:
     ).select(list(_SEG_SCHEMA.keys()))
 
 
+
+def _resolve_batch_size(batch_size: int) -> int:
+    if batch_size > 0:
+        return batch_size
+    from audio_pipeline.pipeline.resources import query_local_gpu, recommend_vtc_batch_size
+    local_gpu = query_local_gpu()
+    if local_gpu is not None:
+        size = recommend_vtc_batch_size(local_gpu.vram_gb)
+        logger.info(f"Auto batch_size={size} for {local_gpu.name} ({local_gpu.vram_gb} GB)")
+        return size
+    logger.info("No GPU detected — using default batch_size=128")
+    return 128
+
+
+def _group_by_parent(uid_to_path: dict[str, str], uids: list[str]) -> dict[Path, list[str]]:
+    """Group UIDs by the resolved parent directory of their audio file."""
+    groups: dict[Path, list[str]] = {}
+    for uid in uids:
+        parent = Path(uid_to_path[uid]).resolve().parent
+        groups.setdefault(parent, []).append(uid)
+    return groups
+
+
+
+def _check_audio(uid_to_path: dict[str, str], file_ids: list[str]) -> None:
+    """Log audio properties and warn on known inference-breaking conditions.
+
+    Raises whatever torchcodec raises if a file cannot be opened — this is
+    intentional: segma swallows per-file errors with no traceback, so a failure
+    here gives the only visible traceback we will ever get.
+    """
+    for uid in file_ids:
+        path = Path(uid_to_path[uid]).resolve()
+        meta = _AudioDecoder(path).metadata
+        dur = meta.duration_seconds_from_header
+        sr = meta.sample_rate  # pyright: ignore[reportAttributeAccessIssue]
+        ch = meta.num_channels  # pyright: ignore[reportAttributeAccessIssue]
+        if dur is None:
+            logger.warning(f"{uid}: duration_seconds_from_header=None — will fail in segma")
+        if sr != 16_000:
+            logger.warning(f"{uid}: sample_rate={sr} — model expects 16 kHz")
+        if ch and ch > 1:
+            logger.warning(f"{uid}: channels={ch} — model expects mono")
+        logger.debug(f"{uid}: sr={sr} ch={ch} dur={dur:.1f}s" if dur is not None else f"{uid}: sr={sr} ch={ch} dur=None")
+
+
+def _run_shard_inference(
+    file_ids: list[str],
+    uid_to_path: dict[str, str],
+    work_dir: Path,
+    *,
+    model_root: Path,
+    thresholds_preset: str,
+    batch_size: int,
+    device: str,
+    stride_pct: float,
+) -> tuple[pl.DataFrame, set[str]]:
+    """Run VTC on the given file IDs, return (raw_segments_df, rttm_uids).
+
+    Groups files by parent directory and calls run_vtc once per group,
+    writing a URIs file into work_dir. Audio files are never copied or linked.
+    """
+    _check_audio(uid_to_path, file_ids)
+    out_dir = work_dir / "out"
+    for i, (wav_dir, uids) in enumerate(_group_by_parent(uid_to_path, file_ids).items()):
+        uris_file = work_dir / f"uris_{i}.txt"
+        uris_file.write_text("\n".join(uids))
+        run_vtc(
+            output=str(out_dir),
+            wavs=str(wav_dir),
+            uris=uris_file,
+            config=model_root,
+            checkpoint=model_root,
+            thresholds=thresholds_preset,
+            thresholds_location=model_root,
+            batch_size=batch_size,
+            device=device,
+            stride_pct=stride_pct,
+            keep_raw=True,
+            write_csv=False,
+        )
+    rttm_files = sorted((out_dir / "raw_rttm").glob("*.rttm"))
+    rttm_uids = {f.stem for f in rttm_files}
+    raw_df = (
+        pl.concat([_load_rttm(f) for f in rttm_files], how="vertical")
+        if rttm_files
+        else pl.DataFrame(schema=_SEG_SCHEMA)
+    )
+    return raw_df, rttm_uids
+
+
+def _build_meta_df(
+    raw_df: pl.DataFrame,
+    rttm_uids: set[str],
+    file_ids: list[str],
+    thresholds_preset: str,
+    prev_meta_df: pl.DataFrame | None,
+) -> pl.DataFrame:
+    """Build the per-shard metadata DataFrame, merged with any previous run."""
+    empty_seg = pl.DataFrame(schema=_SEG_SCHEMA)
+    produced_uids = set(raw_df["uid"].unique().to_list()) if not raw_df.is_empty() else set()
+    empty_uids = rttm_uids - produced_uids
+    missing_uids = set(file_ids) - rttm_uids
+
+    rows = (
+        [vtc_meta_row(uid, thresholds_preset, raw_df.filter(pl.col("uid") == uid)) for uid in produced_uids]
+        + [vtc_meta_row(uid, thresholds_preset, empty_seg) for uid in empty_uids]
+        + [vtc_error_row(uid, "no RTTM produced") for uid in missing_uids]
+    )
+    new_df = pl.DataFrame(rows) if rows else None
+
+    parts: list[pl.DataFrame] = []
+    if prev_meta_df is not None:
+        kept = (
+            prev_meta_df.filter(~pl.col("uid").is_in(new_df["uid"].to_list()))
+            if new_df is not None
+            else prev_meta_df
+        )
+        if not kept.is_empty():
+            parts.append(kept)
+    if new_df is not None:
+        parts.append(new_df)
+
+    result = pl.concat(parts) if parts else pl.DataFrame()
+    return result.unique(subset=["uid"], keep="last") if not result.is_empty() else result
+
 def main(
     dataset: str,
     model_root: Path = MODEL_ROOT / "vtc",
@@ -103,22 +230,7 @@ def main(
     sample: int | float | None = None,
 ) -> None:
     set_seeds(42)
-
-    if batch_size <= 0:
-        from audio_pipeline.pipeline.resources import (
-            query_local_gpu,
-            recommend_vtc_batch_size,
-        )
-
-        local_gpu = query_local_gpu()
-        if local_gpu is not None:
-            batch_size = recommend_vtc_batch_size(local_gpu.vram_gb)
-            logger.info(
-                f"Auto batch_size={batch_size} for {local_gpu.name} ({local_gpu.vram_gb} GB)"
-            )
-        else:
-            batch_size = 128
-            logger.info(f"No GPU detected — using default batch_size={batch_size}")
+    batch_size = _resolve_batch_size(batch_size)
 
     paths = get_dataset_paths(dataset)
     logger.info(f"Dataset: {dataset}")
@@ -143,16 +255,19 @@ def main(
         logger.info(f"Shard {array_id}/{array_count - 1}: {len(file_ids)} files")
 
     shard_id = array_id if array_id is not None else 0
-
     meta_dir = paths.output / "vtc_meta"
     meta_path = meta_dir / f"shard_{shard_id}.parquet"
-    prev_meta_df: pl.DataFrame | None = None
 
-    completed_uids = load_completed_ids(
-        meta_dir, id_column="uid", pattern="shard_*.parquet"
-    )
-    if meta_path.exists():
-        prev_meta_df = pl.read_parquet(meta_path)
+    completed_uids = load_completed_ids(meta_dir, id_column="uid", pattern="shard_*.parquet")
+    prev_meta_df = pl.read_parquet(meta_path) if meta_path.exists() else None
+
+    # Subtract error UIDs so failed files are retried on the next run.
+    if completed_uids and meta_dir.is_dir():
+        meta_files = sorted(meta_dir.glob("shard_*.parquet"))
+        if meta_files:
+            all_meta = pl.concat([pl.read_parquet(f) for f in meta_files])
+            error_uids = set(all_meta.filter(pl.col("error") != "")["uid"].to_list())
+            completed_uids -= error_uids
 
     file_ids_to_process = [uid for uid in file_ids if uid not in completed_uids]
     if len(file_ids_to_process) < len(file_ids):
@@ -160,84 +275,33 @@ def main(
             f"Resume: {len(file_ids) - len(file_ids_to_process)} done, "
             f"{len(file_ids_to_process)} remaining"
         )
-
     if not file_ids_to_process:
         logger.info("No files to process.")
         return
 
     t0 = time.time()
-    empty_seg = pl.DataFrame(schema=_SEG_SCHEMA)
-    rttm_uids: set[str] = set()
-    raw_df: pl.DataFrame = empty_seg
     logger.info(f"Shard {shard_id}: {len(file_ids_to_process)} files")
 
-    with tempfile.TemporaryDirectory(prefix="vtc_") as tmp:
-        tmp_wavs = Path(tmp) / "wavs"
-        tmp_out = Path(tmp) / "out"
-        tmp_wavs.mkdir()
-
-        for uid in file_ids_to_process:
-            src = Path(uid_to_path[uid])
-            (tmp_wavs / src.name).symlink_to(src)
-
-        run_vtc(
-            output=str(tmp_out),
-            wavs=str(tmp_wavs),
-            config=model_root,
-            checkpoint=model_root,
-            thresholds=thresholds_preset,
-            thresholds_location=model_root,
-            batch_size=batch_size,
-            device=device,
-            stride_pct=stride_pct,
-            keep_raw=True,
-            write_csv=False,
+    work_dir = paths.output / "vtc_work" / f"shard_{shard_id}"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        raw_df, rttm_uids = _run_shard_inference(
+            file_ids_to_process, uid_to_path, work_dir,
+            model_root=model_root, thresholds_preset=thresholds_preset,
+            batch_size=batch_size, device=device, stride_pct=stride_pct,
         )
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
 
-        rttm_files = sorted((tmp_out / "raw_rttm").glob("*.rttm"))
-        rttm_uids = {f.stem for f in rttm_files}
-        if rttm_files:
-            raw_df = pl.concat(
-                [_load_rttm(f) for f in rttm_files], how="vertical"
-            )
+    meta_df = _build_meta_df(raw_df, rttm_uids, file_ids_to_process, thresholds_preset, prev_meta_df)
 
-    produced_uids = (
-        set(raw_df["uid"].unique().to_list()) if not raw_df.is_empty() else set()
-    )
-    empty_uids = rttm_uids - produced_uids   # processed, no speech detected
-    missing_uids = set(file_ids_to_process) - rttm_uids  # no RTTM created
-
-    meta_rows: list[dict] = (
-        [
-            vtc_meta_row(uid, thresholds_preset, raw_df.filter(pl.col("uid") == uid))
-            for uid in produced_uids
-        ]
-        + [vtc_meta_row(uid, thresholds_preset, empty_seg) for uid in empty_uids]
-        + [vtc_error_row(uid, "no RTTM produced") for uid in missing_uids]
-    )
-
-    new_meta_df = pl.DataFrame(meta_rows) if meta_rows else None
-    meta_parts: list[pl.DataFrame] = []
-    if prev_meta_df is not None:
-        if new_meta_df is not None:
-            new_uids = set(new_meta_df["uid"].to_list())
-            kept = prev_meta_df.filter(~pl.col("uid").is_in(list(new_uids)))
-            if not kept.is_empty():
-                meta_parts.append(kept)
-        else:
-            meta_parts.append(prev_meta_df)
-    if new_meta_df is not None:
-        meta_parts.append(new_meta_df)
-    meta_df = pl.concat(meta_parts) if meta_parts else pl.DataFrame()
-    if not meta_df.is_empty():
-        meta_df = meta_df.unique(subset=["uid"], keep="last")
-
+    empty_seg = pl.DataFrame(schema=_SEG_SCHEMA)
     prev_seg_path = paths.output / "vtc_raw" / f"shard_{shard_id}.parquet"
     if prev_seg_path.exists() and completed_uids:
         prev_seg_df = pl.read_parquet(prev_seg_path)
         kept = prev_seg_df.filter(~pl.col("uid").is_in(list(rttm_uids)))
-        seg_parts = [p for p in [kept, raw_df] if not p.is_empty()]
-        seg_df = pl.concat(seg_parts, how="vertical") if seg_parts else empty_seg
+        parts = [p for p in [kept, raw_df] if not p.is_empty()]
+        seg_df = pl.concat(parts, how="vertical") if parts else empty_seg
     else:
         seg_df = raw_df
 
@@ -245,37 +309,30 @@ def main(
 
     meta_dir.mkdir(parents=True, exist_ok=True)
     atomic_write_parquet(meta_df, meta_path)
-
-    vtc_raw_dir = paths.output / "vtc_raw"
-    vtc_raw_dir.mkdir(parents=True, exist_ok=True)
-    atomic_write_parquet(seg_df, vtc_raw_dir / f"shard_{shard_id}.parquet")
-
-    vtc_merged_dir = paths.output / "vtc_merged"
-    vtc_merged_dir.mkdir(parents=True, exist_ok=True)
-    atomic_write_parquet(merged_df, vtc_merged_dir / f"shard_{shard_id}.parquet")
+    (paths.output / "vtc_raw").mkdir(parents=True, exist_ok=True)
+    atomic_write_parquet(seg_df, paths.output / "vtc_raw" / f"shard_{shard_id}.parquet")
+    (paths.output / "vtc_merged").mkdir(parents=True, exist_ok=True)
+    atomic_write_parquet(merged_df, paths.output / "vtc_merged" / f"shard_{shard_id}.parquet")
 
     wall = time.time() - t0
+    missing_uids = set(file_ids_to_process) - rttm_uids
     logger.info("─" * 50)
     logger.info(f"Shard {shard_id} complete")
-    logger.info(
-        f"  Files    : {len(produced_uids) + len(empty_uids)}/{len(file_ids_to_process)}"
-        f"  ({len(missing_uids)} errors)"
-    )
+    logger.info(f"  Files    : {len(rttm_uids)}/{len(file_ids_to_process)}  ({len(missing_uids)} errors)")
     logger.info(f"  Segments : {len(seg_df):,} raw, {len(merged_df):,} merged")
     logger.info(f"  Wall time: {hhmmss(wall)}")
     logger.info("─" * 50)
 
-    total_bytes = sum(
-        os.path.getsize(uid_to_path[uid])
-        for uid in file_ids_to_process
-        if os.path.exists(uid_to_path[uid])
-    )
     log_benchmark(
         step="vtc",
         dataset=dataset,
         n_files=len(file_ids_to_process),
         wall_seconds=wall,
-        total_bytes=total_bytes,
+        total_bytes=sum(
+            os.path.getsize(uid_to_path[uid])
+            for uid in file_ids_to_process
+            if os.path.exists(uid_to_path[uid])
+        ),
         n_workers=1,
         extra={"device": device, "shard_id": shard_id},
     )

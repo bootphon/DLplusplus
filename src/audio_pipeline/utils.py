@@ -517,14 +517,18 @@ def load_completed_ids(
     """
     if meta_dir.is_file():
         df = pl.read_parquet(meta_dir)
-        return set(df[id_column].to_list())
+        return set(df[id_column].to_list()) if id_column in df.columns else set()
     if not meta_dir.is_dir():
         return set()
     files = sorted(meta_dir.glob(pattern))
     if not files:
         return set()
-    df = pl.concat([pl.read_parquet(f) for f in files])
-    return set(df[id_column].to_list())
+    ids: set[str] = set()
+    for f in files:
+        df = pl.read_parquet(f)
+        if id_column in df.columns:
+            ids.update(df[id_column].to_list())
+    return ids
 
 
 # ---------------------------------------------------------------------------
