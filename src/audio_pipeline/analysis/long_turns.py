@@ -40,6 +40,7 @@ import numpy as np
 import polars as pl
 import soundfile as sf
 
+from audio_pipeline.core.vtc_io import load_vtc_segments
 from audio_pipeline.core import LABEL_COLORS, VTC_LABELS
 from audio_pipeline.utils import get_dataset_paths
 
@@ -58,11 +59,8 @@ logger = logging.getLogger("long_turns")
 LABELS = VTC_LABELS  # ["FEM", "MAL", "KCHI", "OCH"]
 
 
-def _load_vtc_merged(vtc_dir: Path) -> pl.DataFrame:
-    files = sorted(vtc_dir.glob("shard_*.parquet"))
-    if not files:
-        raise FileNotFoundError(f"No shard_*.parquet files in {vtc_dir}")
-    return pl.concat([pl.read_parquet(f) for f in files], how="vertical")
+def _load_vtc_merged(output_dir: Path) -> pl.DataFrame:
+    return load_vtc_segments(output_dir, kind="merged")
 
 
 def _hhmmss(seconds: float) -> str:
@@ -409,7 +407,7 @@ def main(argv: list[str] | None = None) -> None:
 
     # ---- Load VTC segments ------------------------------------------------
     logger.info("Loading vtc_merged from %s", vtc_dir)
-    df = _load_vtc_merged(vtc_dir)
+    df = _load_vtc_merged(paths.output)
     logger.info("  %d total segments across %d files", len(df), df["uid"].n_unique())
 
     # ---- Filter long turns ------------------------------------------------

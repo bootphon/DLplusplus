@@ -36,6 +36,9 @@ EXTRA_ARGS=""
 
 mkdir -p ${HOME}/logs/dlplusplus/{vad,vtc,snr,esc,segment_snr,package}
 
+# Ensure all packages are built before capturing preflight output
+uv sync --quiet
+
 # ---------- Preflight: auto-detect resources ------------------------------
 
 echo ""

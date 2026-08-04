@@ -18,6 +18,7 @@ from typing import Any, Protocol, runtime_checkable
 import numpy as np
 import polars as pl
 
+from audio_pipeline.core.vtc_io import load_vtc_segments
 from audio_pipeline.packaging.clips import Clip, Segment
 
 # ---------------------------------------------------------------------------
@@ -60,21 +61,17 @@ class VTCLoader:
         return vtc_dir.exists() and any(vtc_dir.glob("*.parquet"))
 
     def load_file(self, output_dir: Path, uid: str) -> list[Segment]:
-        vtc_dir = output_dir / "vtc_merged"
-        if not vtc_dir.exists():
+        try:
+            df = load_vtc_segments(output_dir, kind="merged", uid=uid)
+        except FileNotFoundError:
             return []
-        segments: list[Segment] = []
-        for p in sorted(vtc_dir.glob("*.parquet")):
-            df = pl.read_parquet(p).filter(pl.col("uid") == uid)
-            for row in df.iter_rows(named=True):
-                segments.append(
-                    Segment(
-                        onset=row["onset"],
-                        offset=row["offset"],
-                        label=row.get("label"),
-                    )
-                )
-        return sorted(segments, key=lambda s: s.onset)
+        return sorted(
+            [
+                Segment(onset=row["onset"], offset=row["offset"], label=row.get("label"))
+                for row in df.iter_rows(named=True)
+            ],
+            key=lambda s: s.onset,
+        )
 
     def attach_to_clip(self, clip: Clip, file_data: list[Segment]) -> None:
         # Segments are already assigned by build_clips — nothing to do.
