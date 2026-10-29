@@ -1,28 +1,30 @@
 [project]
-name = "dlplusplus"
+name = "stetho"
 version = "0.1.0"
-description = "DL++ — Feature processing and data loading for child-centered long-form audio"
+description = "Orchestrate metadata extraction on audio/video datasets."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "fastexcel>=0.19.0",
-    "matplotlib>=3.10.6",
-    "numpy>=2.0",
-    "openpyxl>=3.1.5",
+    "clypi>=1.0",
+    "tomlkit>=0.13",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
     "polars>=1.0",
-    "pyarrow>=23.0.1",
-    "brouhaha",
-    "vtc",
+    "numpy>=2.0",
     "soundfile>=0.13",
-    "ten-vad>=1.0.6.8",
-    "panns-inference>=0.1.1",
-    "webdataset>=1.0.2",
-    "pydantic-settings>=2.14.0",
+    "rich>=13.0",
 ]
 
+[project.optional-dependencies]
+vtc = ["vtc"]
+whisperx = ["whisperx>=3.1"]
+vad = ["ten-vad>=1.0.6.8"]
+snr = ["brouhaha"]
+esc = ["panns-inference>=0.1.1"]
+hf = ["datasets>=3.0"]
+
 [project.scripts]
-make-manifest = "audio_pipeline.make_manifest:main"
-download-models = "audio_pipeline.download_models:main"
+stetho = "audio_pipeline.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.5.15,<0.12"]
@@ -32,26 +34,9 @@ build-backend = "uv_build"
 module-root = "src"
 module-name = ["audio_pipeline"]
 
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = ["-v", "--tb=short", "-rA", "--durations=10"]
-
 [tool.uv.sources]
 brouhaha = { git = "https://github.com/marianne-m/brouhaha-vad", rev = "1e175a9dee0f4d7c618653d64796a45405a768e1" }
-# branch: api-migration
 vtc = { git = "https://github.com/nhamilakis/VTC", rev = "e8e819f781e4a25b1f24859d9af5d73f9e5e8df5" }
-
-[dependency-groups]
-dev = [
-    "pytest>=9.0.2",
-    "huggingface-hub>=0.35.0",
-    "pygithub>=2.9.1",
-    "ipython>=9.13.0",
-]
 
 [tool.uv]
 override-dependencies = [
@@ -61,3 +46,85 @@ override-dependencies = [
     "numpy>=2.0",
     "pyannote-audio>=3.4,<4",
 ]
+
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pytest>=9.0.2",
+    "pytest-cov>=6.0",
+    "pre-commit>=4.0",
+    "ipython>=9.13.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = ["-q", "--tb=short", "-rA"]
+
+[tool.ruff]
+src = ["src"]
+target-version = "py313"
+extend-exclude = ["src/legacy_pipeline", "tests"]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D203",   # incompatible with D211 (no blank line before class docstring)
+    "D401",
+    "D213",   # incompatible with D212 (summary on the first line)
+    "D417",   # no Args sections — enforced by python.skill
+    "COM812", # trailing comma — the formatter owns this
+    "ISC001", # implicit string concat — conflicts with the formatter
+    "CPY001", # no copyright header requirement
+    "FIX002", # TODO comments are allowed
+    "TD002",  # no author required on TODOs
+    "TD003",  # no issue link required on TODOs
+    "D107",   # no docstring in init
+    "D105",   # no docstring in __post_init__
+    "S603",   # subcommand cmd validation (rule is bad and does not really check anything)
+
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["D104", "F401"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["src/audio_pipeline"]
+exclude = ["src/legacy_pipeline"]
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+
+[[tool.mypy.overrides]]
+module = [
+    "vtc.*",
+    "brouhaha.*",
+    "whisperx.*",
+    "ten_vad.*",
+    "panns_inference.*",
+    "pyannote.*",
+    "torch.*",
+    "torchaudio.*",
+    "soundfile.*",
+    "datasets.*",
+]
+ignore_missing_imports = true
+
+
+[tool.basedpyright]
+include = ["src/audio_pipeline"]
+exclude = ["src/legacy_pipeline", "**/__pycache__", "**/.venv"]
+pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
