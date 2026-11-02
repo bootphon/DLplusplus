@@ -69,3 +69,13 @@ class ProbeError(DatasetError):
     def __init__(self, path: Path) -> None:
         self.path = path
         super().__init__(f"could not probe media file {path}")
+
+
+class MissingExtraError(StethoError):
+    """A required optional extra is not installed."""
+
+    def __init__(self, extra: str) -> None:
+        self.extra = extra
+        super().__init__(
+            f"the {extra!r} extra is required; install it with `pip install stetho[{extra}]`",
+        )

@@ -1,7 +1,9 @@
-"""Local dataset importers and the manifest builder.
+"""Dataset importers and the manifest builder.
 
 Discovers media under a source folder, probes each file, places it into the
 workspace per the import mode, and writes the Parquet manifest and dataset.toml.
+The Hugging Face path (`run_hf_import`) instead pulls a dataset from the Hub,
+materialises its audio under `media/`, and writes the same manifest/dataset.toml.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ import soundfile
 
 from .config import DatasetConfig, DatasetFile
 from .dataset import MANIFEST_SCHEMA
-from .errors import DatasetExistsError, NoMediaFoundError, ProbeError
+from .errors import DatasetExistsError, MissingExtraError, NoMediaFoundError, ProbeError
 from .progress import track
 
 if t.TYPE_CHECKING:
@@ -39,6 +41,8 @@ _AUDIO_EXT = frozenset(
 _VIDEO_EXT = frozenset(
     {"mp4", "mkv", "mov", "avi", "webm", "m4v", "mpg", "mpeg", "wmv"},
 )
+
+_DEFAULT_SUFFIX = ".wav"  # fallback when an HF row carries no original filename
 
 
 class MediaInfo(t.NamedTuple):
@@ -183,6 +187,12 @@ def _build_rows(
     return rows
 
 
+def _finalize(dataset_dir: Path, rows: list[dict[str, t.Any]], config: DatasetConfig) -> None:
+    """Write the Parquet manifest and dataset.toml for a freshly imported dataset."""
+    pl.DataFrame(rows, schema=MANIFEST_SCHEMA).write_parquet(dataset_dir / _MANIFEST)
+    DatasetFile.create(dataset_dir / _DATASET_TOML, config).save()
+
+
 def run_import(
     workspace: Workspace,
     source: Path,
@@ -218,7 +228,55 @@ def run_import(
         console=console,
         disable_progress=disable_progress,
     )
-    pl.DataFrame(rows, schema=MANIFEST_SCHEMA).write_parquet(dataset_dir / _MANIFEST)
     config = DatasetConfig(type=dataset_type, source=str(source.resolve()), mode=mode)
-    DatasetFile.create(dataset_dir / _DATASET_TOML, config).save()
+    _finalize(dataset_dir, rows, config)
+    return len(rows)
+
+
+def run_hf_import(
+    workspace: Workspace,
+    repo_id: str,
+    name: str,
+    *,
+    console: Console,
+    disable_progress: bool = False,
+    revision: str | None = None,
+) -> int:
+    """Import a Hugging Face file-based audio dataset; return the item count.
+
+    Downloads the dataset repo with `snapshot_download`, then imports its audio
+    files exactly like a local folder (discover → probe → copy → manifest).
+
+    Raises:
+        MissingExtraError: If the `hf` extra (huggingface_hub) is not installed.
+        DatasetExistsError: If the dataset name already exists.
+        NoMediaFoundError: If the repo contains no audio files.
+        ProbeError: If a media file cannot be probed.
+
+    """
+    try:
+        import huggingface_hub  # noqa: PLC0415
+    except ImportError as err:
+        raise MissingExtraError("hf") from err
+
+    dataset_dir = workspace.dataset_dir(name)
+    if dataset_dir.exists():
+        raise DatasetExistsError(name)
+    snapshot = Path(huggingface_hub.snapshot_download(repo_id, repo_type="dataset", revision=revision))
+    importer = _IMPORTERS["audio"]
+    files = _discover(snapshot, importer.extensions)
+    if not files:
+        raise NoMediaFoundError(snapshot, "audio")
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    rows = _build_rows(
+        importer,
+        files,
+        snapshot,
+        dataset_dir / _MEDIA,
+        "copy",
+        console=console,
+        disable_progress=disable_progress,
+    )
+    config = DatasetConfig(type="audio", source=repo_id, mode="huggingface")
+    _finalize(dataset_dir, rows, config)
     return len(rows)

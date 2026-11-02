@@ -12,7 +12,7 @@ from clypi import Command, Positional, arg
 
 from .core.config import DatasetType  # noqa: TC001
 from .core.errors import StethoError
-from .core.importer import LocalMode, run_import
+from .core.importer import LocalMode, run_hf_import, run_import
 from .core.progress import resolve_disable
 from .core.workspace import Workspace
 
@@ -78,11 +78,50 @@ class Import(Command):
         _OUT.print(f"[green]imported[/] {count} item(s) into {self.name!r}")
 
 
+class ImportHF(Command):
+    """Import a Hugging Face audio dataset."""
+
+    # clypi derives the command name from the class name via `_camel_to_dashed`,
+    # which would turn `ImportHF` into `import-h-f`. `prog()`
+    @classmethod
+    def prog(cls) -> str:
+        return "import-hf"
+
+    # `repo` must precede the inherited `workspace` (clypi binds positionals by
+    # declaration order), mirroring `Import.source`.
+    repo: Positional[str] = arg(help="Hugging Face dataset repo id")
+    workspace: Positional[Path] = arg(inherited=True)
+    name: str = arg(help="dataset name")
+    revision: str | None = arg(default=None, help="git revision (branch, tag, or commit)")
+    no_progress: bool = arg(default=False, help="disable the progress display (also via STETHO_PROGRESS=0)")
+
+    async def run(self) -> None:
+        """Download the HF dataset into the workspace as a new dataset.
+
+        Raises:
+            WorkspaceNotFoundError: If the workspace is not initialised.
+            MissingExtraError: If the `hf` extra is not installed.
+            DatasetExistsError: If the dataset name already exists.
+            HFImportError: If the dataset has no usable audio column.
+            ProbeError: If a materialised audio file cannot be probed.
+
+        """
+        count = run_hf_import(
+            Workspace.open(self.workspace),
+            self.repo,
+            self.name,
+            revision=self.revision,
+            console=_OUT,
+            disable_progress=resolve_disable(no_progress_flag=self.no_progress),
+        )
+        _OUT.print(f"[green]imported[/] {count} item(s) into {self.name!r}")
+
+
 class Stetho(Command):
     """Orchestrate metadata extraction on audio/video datasets."""
 
     workspace: Positional[Path] = arg(help="path to the workspace root")
-    subcommand: Init | Import | None = None
+    subcommand: Init | Import | ImportHF | None = None
 
     async def post_run_hook(self, exception: Exception | None) -> None:
         """Append a successful invocation to the workspace command log."""

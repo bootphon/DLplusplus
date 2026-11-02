@@ -21,7 +21,7 @@ whisperx = ["whisperx>=3.1"]
 vad = ["ten-vad>=1.0.6.8"]
 snr = ["brouhaha"]
 esc = ["panns-inference>=0.1.1"]
-hf = ["datasets>=3.0"]
+hf = ["huggingface-hub>=0.24"]
 
 [project.scripts]
 stetho = "audio_pipeline.cli:main"
@@ -72,20 +72,24 @@ line-length = 120
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-    "D203",   # incompatible with D211 (no blank line before class docstring)
+    "D203",    # incompatible with D211 (no blank line before class docstring)
     "D401",
-    "D213",   # incompatible with D212 (summary on the first line)
-    "D417",   # no Args sections — enforced by python.skill
-    "COM812", # trailing comma — the formatter owns this
-    "ISC001", # implicit string concat — conflicts with the formatter
-    "CPY001", # no copyright header requirement
-    "FIX002", # TODO comments are allowed
-    "TD002",  # no author required on TODOs
-    "TD003",  # no issue link required on TODOs
-    "D107",   # no docstring in init
-    "D105",   # no docstring in __post_init__
-    "S603",   # subcommand cmd validation (rule is bad and does not really check anything)
-    "TC003",  # TypeChecking block, detection does not work that well
+    "D213",    # incompatible with D212 (summary on the first line)
+    "D417",    # no Args sections — enforced by python.skill
+    "COM812",  # trailing comma — the formatter owns this
+    "ISC001",  # implicit string concat — conflicts with the formatter
+    "CPY001",  # no copyright header requirement
+    "FIX002",  # TODO comments are allowed
+    "TD002",   # no author required on TODOs
+    "TD003",   # no issue link required on TODOs
+    "D107",    # no docstring in init
+    "D105",    # no docstring in __post_init__
+    "S603",    # subcommand cmd validation (rule is bad and does not really check anything)
+    "TC003",   # TypeChecking block, detection does not work that well
+    "PLR0913", # Argument limit on functions, does not seem necessairy and leads to verbose alternatives
+    "TRY003",  # This is too strict on error messages (especially on a cli, were explanation of error is important)
+    "EM102",   # This is annoying when using explicit errors
+    "EM101",   # This makes you create a useless variable for no reason
 
 ]
 
@@ -116,7 +120,7 @@ module = [
     "torch.*",
     "torchaudio.*",
     "soundfile.*",
-    "datasets.*",
+    "huggingface_hub.*",
 ]
 ignore_missing_imports = true
 
