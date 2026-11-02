@@ -18,8 +18,11 @@ import soundfile
 from .config import DatasetConfig, DatasetFile
 from .dataset import MANIFEST_SCHEMA
 from .errors import DatasetExistsError, NoMediaFoundError, ProbeError
+from .progress import track
 
 if t.TYPE_CHECKING:
+    from rich.console import Console
+
     from .config import DatasetType
     from .workspace import Workspace
 
@@ -157,10 +160,14 @@ def _build_rows(
     source: Path,
     media_dir: Path,
     mode: LocalMode,
+    *,
+    console: Console,
+    disable_progress: bool,
 ) -> list[dict[str, t.Any]]:
     """Probe and place each file, returning manifest rows."""
     rows: list[dict[str, t.Any]] = []
-    for path in files:
+    tracked = track(files, description="importing", console=console, total=len(files), disable=disable_progress)
+    for path in tracked:
         info = importer.probe(path)
         dest = _place(path, source, media_dir, mode)
         rows.append(
@@ -182,6 +189,9 @@ def run_import(
     name: str,
     dataset_type: DatasetType,
     mode: LocalMode,
+    *,
+    console: Console,
+    disable_progress: bool = False,
 ) -> int:
     """Import a local folder as a new dataset; return the item count.
 
@@ -199,7 +209,15 @@ def run_import(
     if not files:
         raise NoMediaFoundError(source, dataset_type)
     dataset_dir.mkdir(parents=True, exist_ok=True)
-    rows = _build_rows(importer, files, source, dataset_dir / _MEDIA, mode)
+    rows = _build_rows(
+        importer,
+        files,
+        source,
+        dataset_dir / _MEDIA,
+        mode,
+        console=console,
+        disable_progress=disable_progress,
+    )
     pl.DataFrame(rows, schema=MANIFEST_SCHEMA).write_parquet(dataset_dir / _MANIFEST)
     config = DatasetConfig(type=dataset_type, source=str(source.resolve()), mode=mode)
     DatasetFile.create(dataset_dir / _DATASET_TOML, config).save()

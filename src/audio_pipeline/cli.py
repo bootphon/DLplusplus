@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import sys
 import typing as t
-from pathlib import Path  # noqa: TC003
+from pathlib import Path
 
 import rich.console
 from clypi import Command, Positional, arg
@@ -13,6 +13,7 @@ from clypi import Command, Positional, arg
 from .core.config import DatasetType  # noqa: TC001
 from .core.errors import StethoError
 from .core.importer import LocalMode, run_import
+from .core.progress import resolve_disable
 from .core.workspace import Workspace
 
 __all__ = ["main"]
@@ -53,6 +54,7 @@ class Import(Command):
     name: str = arg(help="dataset name")
     type: DatasetType = arg(help="dataset media type")
     mode: LocalMode = arg(default="symlink", help="copy, symlink, or reference")
+    no_progress: bool = arg(default=False, help="disable the progress display (also via STETHO_PROGRESS=0)")
 
     async def run(self) -> None:
         """Import SOURCE into the workspace as a new dataset.
@@ -70,6 +72,8 @@ class Import(Command):
             self.name,
             self.type,
             self.mode,
+            console=_OUT,
+            disable_progress=resolve_disable(no_progress_flag=self.no_progress),
         )
         _OUT.print(f"[green]imported[/] {count} item(s) into {self.name!r}")
 
