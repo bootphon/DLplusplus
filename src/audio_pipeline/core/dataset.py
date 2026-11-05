@@ -33,10 +33,6 @@ MANIFEST_SCHEMA = pl.Schema(
     },
 )
 
-_MANIFEST = "manifest.parquet"
-_CONVERTED = "converted"
-_DATASET_TOML = "dataset.toml"
-
 
 def _suffix(file: AudioFile) -> str:
     """A file's lowercase extension without the dot."""
@@ -63,7 +59,7 @@ class Dataset(abc.ABC):
     @property
     def manifest_path(self) -> Path:
         """Path to this dataset's Parquet manifest."""
-        return self.workspace.dataset_dir(self.name) / _MANIFEST
+        return self.workspace.manifest_file(self.name)
 
     def read_manifest(self) -> pl.DataFrame:
         """Read the Parquet manifest.
@@ -112,7 +108,7 @@ class AudioDataset(Dataset):
 
     def _layer_files(self, fmt: str) -> t.Iterator[AudioFile]:
         """Yield the converted-layer file for each manifest item."""
-        base = self.workspace.dataset_dir(self.name) / _CONVERTED
+        base = self.workspace.audio_dir(self.name, fmt)
         for row in self.read_manifest().iter_rows(named=True):
             item_id = row["item_id"]
             yield AudioFile(item_id=item_id, path=base / f"{item_id}.{fmt}")
@@ -144,7 +140,7 @@ def load_dataset(workspace: Workspace, name: str) -> Dataset:
         ConfigError: If dataset.toml fails validation.
 
     """
-    config = DatasetFile.load(workspace.dataset_dir(name) / _DATASET_TOML).config
+    config = DatasetFile.load(workspace.dataset_toml(name)).config
     match config.type:
         case "audio":
             return AudioDataset(name=name, workspace=workspace, config=config)

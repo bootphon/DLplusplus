@@ -26,7 +26,7 @@ ImportMode = t.Literal["copy", "symlink", "reference", "huggingface"]
 _META_TEMPLATE = """\
 # stetho workspace configuration.
 # Global settings for this workspace; per-dataset settings live in
-# datasets/<name>/dataset.toml.
+# registry/<name>/dataset.toml.
 
 # Worker processes for parallel steps (>= 1).
 workers = 1

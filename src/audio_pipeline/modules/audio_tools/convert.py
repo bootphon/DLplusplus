@@ -1,13 +1,12 @@
-"""The `convert` process: transcode dataset audio via ffmpeg into `converted/`.
+"""The `convert` process: transcode dataset audio via ffmpeg into the audio layer.
 
-Reads the dataset's raw audio (manifest/`media/`) and writes a target-format copy
-under `datasets/<name>/converted/`, recording the active layer in dataset.toml.
+Reads the dataset's raw audio (manifest/`source/`) and writes a target-format copy
+under `audio/<format>/<name>/`, recording the active layer in dataset.toml.
 Native process: needs the `ffmpeg` binary, no optional extra.
 """
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import typing as t
 from pathlib import Path
@@ -20,13 +19,7 @@ from audio_pipeline.core.process import ItemProcess, ProcessParams, register
 if t.TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from audio_pipeline.core.workspace import Workspace
-
     from .types import AudioFormat
-
-_CONVERTED = "converted"
-_MEDIA = "media"
-_DATASET_TOML = "dataset.toml"
 
 
 class ConvertParams(ProcessParams):
@@ -49,7 +42,7 @@ class Convert(ItemProcess[AudioFile]):
         return t.cast("ConvertParams", self.params)
 
     def _dest(self, item: AudioFile) -> Path:
-        base = self.workspace.dataset_dir(self.dataset.name) / _CONVERTED
+        base = self.workspace.audio_dir(self.dataset.name, self._p.format)
         return base / f"{item.item_id}.{self._p.format}"
 
     def items(self) -> Iterator[AudioFile]:
@@ -69,7 +62,7 @@ class Convert(ItemProcess[AudioFile]):
 
     def on_complete(self) -> None:
         """Record the converted layer in dataset.toml once the run completes."""
-        toml = self.workspace.dataset_dir(self.dataset.name) / _DATASET_TOML
+        toml = self.workspace.dataset_toml(self.dataset.name)
         config_file = DatasetFile.load(toml)
         config_file.set_converted(
             ConvertedLayer(format=self._p.format, sample_rate=self._p.sample_rate, mono=self._p.mono),
@@ -97,10 +90,3 @@ def _run_ffmpeg(src: Path, dest: Path, params: ConvertParams) -> None:
         raise MissingBinaryError("ffmpeg") from err
     except subprocess.CalledProcessError as err:
         raise ConversionError(src, err.stderr) from err
-
-
-def replace_media(workspace: Workspace, dataset_name: str) -> None:
-    """Delete the original media/ directory after a complete convert."""
-    media = workspace.dataset_dir(dataset_name) / _MEDIA
-    if media.exists():
-        shutil.rmtree(media)

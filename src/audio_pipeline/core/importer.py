@@ -3,7 +3,7 @@
 Discovers media under a source folder, probes each file, places it into the
 workspace per the import mode, and writes the Parquet manifest and dataset.toml.
 The Hugging Face path (`run_hf_import`) instead pulls a dataset from the Hub,
-materialises its audio under `media/`, and writes the same manifest/dataset.toml.
+materialises its audio under `source/`, and writes the same manifest/dataset.toml.
 """
 
 from __future__ import annotations
@@ -14,12 +14,13 @@ import subprocess
 import typing as t
 from pathlib import Path
 
+import huggingface_hub
 import polars as pl
 import soundfile
 
 from .config import DatasetConfig, DatasetFile
 from .dataset import MANIFEST_SCHEMA
-from .errors import DatasetExistsError, MissingExtraError, NoMediaFoundError, ProbeError
+from .errors import DatasetExistsError, NoMediaFoundError, ProbeError
 from .progress import track
 
 if t.TYPE_CHECKING:
@@ -31,9 +32,6 @@ if t.TYPE_CHECKING:
 
 LocalMode = t.Literal["copy", "symlink", "reference"]
 
-_MEDIA = "media"
-_MANIFEST = "manifest.parquet"
-_DATASET_TOML = "dataset.toml"
 
 _AUDIO_EXT = frozenset(
     {"wav", "flac", "mp3", "ogg", "opus", "m4a", "aac", "aiff", "aif", "wma"},
@@ -187,10 +185,10 @@ def _build_rows(
     return rows
 
 
-def _finalize(dataset_dir: Path, rows: list[dict[str, t.Any]], config: DatasetConfig) -> None:
+def _finalize(workspace: Workspace, name: str, rows: list[dict[str, t.Any]], config: DatasetConfig) -> None:
     """Write the Parquet manifest and dataset.toml for a freshly imported dataset."""
-    pl.DataFrame(rows, schema=MANIFEST_SCHEMA).write_parquet(dataset_dir / _MANIFEST)
-    DatasetFile.create(dataset_dir / _DATASET_TOML, config).save()
+    pl.DataFrame(rows, schema=MANIFEST_SCHEMA).write_parquet(workspace.manifest_file(name))
+    DatasetFile.create(workspace.dataset_toml(name), config).save()
 
 
 def run_import(
@@ -211,25 +209,25 @@ def run_import(
         ProbeError: If a media file cannot be probed.
 
     """
-    dataset_dir = workspace.dataset_dir(name)
-    if dataset_dir.exists():
+    registry_dir = workspace.registry_dir(name)
+    if registry_dir.exists():
         raise DatasetExistsError(name)
     importer = _IMPORTERS[dataset_type]
     files = _discover(source, importer.extensions)
     if not files:
         raise NoMediaFoundError(source, dataset_type)
-    dataset_dir.mkdir(parents=True, exist_ok=True)
+    registry_dir.mkdir(parents=True, exist_ok=True)
     rows = _build_rows(
         importer,
         files,
         source,
-        dataset_dir / _MEDIA,
+        workspace.source_dir(name),
         mode,
         console=console,
         disable_progress=disable_progress,
     )
     config = DatasetConfig(type=dataset_type, source=str(source.resolve()), mode=mode)
-    _finalize(dataset_dir, rows, config)
+    _finalize(workspace, name, rows, config)
     return len(rows)
 
 
@@ -254,29 +252,24 @@ def run_hf_import(
         ProbeError: If a media file cannot be probed.
 
     """
-    try:
-        import huggingface_hub  # noqa: PLC0415
-    except ImportError as err:
-        raise MissingExtraError("hf") from err
-
-    dataset_dir = workspace.dataset_dir(name)
-    if dataset_dir.exists():
+    registry_dir = workspace.registry_dir(name)
+    if registry_dir.exists():
         raise DatasetExistsError(name)
     snapshot = Path(huggingface_hub.snapshot_download(repo_id, repo_type="dataset", revision=revision))
     importer = _IMPORTERS["audio"]
     files = _discover(snapshot, importer.extensions)
     if not files:
         raise NoMediaFoundError(snapshot, "audio")
-    dataset_dir.mkdir(parents=True, exist_ok=True)
+    registry_dir.mkdir(parents=True, exist_ok=True)
     rows = _build_rows(
         importer,
         files,
         snapshot,
-        dataset_dir / _MEDIA,
+        workspace.source_dir(name),
         "copy",
         console=console,
         disable_progress=disable_progress,
     )
     config = DatasetConfig(type="audio", source=repo_id, mode="huggingface")
-    _finalize(dataset_dir, rows, config)
+    _finalize(workspace, name, rows, config)
     return len(rows)

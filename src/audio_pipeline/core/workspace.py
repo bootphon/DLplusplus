@@ -1,3 +1,5 @@
+"""Definition of a workspace, helper for building relative paths."""
+
 from __future__ import annotations
 
 import typing as t
@@ -12,9 +14,13 @@ if t.TYPE_CHECKING:
 
 Item = t.TypeVar("Item")
 _META = "meta.toml"
-_DATASETS = "datasets"
+_MANIFEST = "manifest.parquet"
+_DATASET_TOML = "dataset.toml"
+_REGISTRY = "registry"
+_SOURCE = "source"
+_AUDIO = "audio"
 _RUNS = "runs"
-_RESULTS = "results"
+_ANNOTATIONS = "annotations"
 _PLOTS = "plots"
 
 
@@ -35,17 +41,33 @@ class Workspace:
         """Path to the meta.toml file."""
         return self.root / _META
 
-    def dataset_dir(self, dataset: str) -> Path:
-        """Path to the dataset.toml file (in each dataset)."""
-        return self.root / _DATASETS / dataset
+    def registry_dir(self, dataset: str) -> Path:
+        """Path to a dataset's registry entry (dataset.toml + manifest)."""
+        return self.root / _REGISTRY / dataset
+
+    def manifest_file(self, dataset: str) -> Path:
+        """Path to a dataset's Parquet manifest."""
+        return self.registry_dir(dataset) / _MANIFEST
+
+    def dataset_toml(self, dataset: str) -> Path:
+        """Path to a dataset's dataset.toml."""
+        return self.registry_dir(dataset) / _DATASET_TOML
+
+    def source_dir(self, dataset: str) -> Path:
+        """Path to a dataset's imported source media."""
+        return self.root / _SOURCE / dataset
+
+    def audio_dir(self, dataset: str, fmt: str) -> Path:
+        """Path to a dataset's converted audio for a given format."""
+        return self.root / _AUDIO / fmt / dataset
 
     def run_dir(self, process: str, dataset: str, run_id: str) -> Path:
         """Path to the run directory for a given run instance."""
         return self.root / _RUNS / process / dataset / run_id
 
-    def results_dir(self, dataset: str) -> Path:
-        """Path to the exported results for a given dataset."""
-        return self.root / _RESULTS / dataset
+    def annotations_dir(self, process: str, dataset: str) -> Path:
+        """Path to a process's exported annotations for a dataset."""
+        return self.root / _ANNOTATIONS / process / dataset
 
     def plots_dir(self, dataset: str) -> Path:
         """Path to the plot directory for a dataset."""
@@ -62,7 +84,7 @@ class Workspace:
         ws = cls(root)
         if ws.meta_file.exists():
             raise WorkspaceExistsError(ws.root)
-        for sub in (_DATASETS, _RUNS, _RESULTS, _PLOTS):
+        for sub in (_REGISTRY, _SOURCE, _RUNS, _ANNOTATIONS, _PLOTS):
             (ws.root / sub).mkdir(parents=True, exist_ok=True)
         MetaFile.create_default(ws.meta_file).save()
         return ws

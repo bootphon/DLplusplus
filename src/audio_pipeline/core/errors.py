@@ -92,15 +92,6 @@ class NeedsConversionError(DatasetError):
         super().__init__(f"dataset {dataset!r} {have}; run `convert --format {required}` first")
 
 
-class ReplaceMediaError(DatasetError):
-    """`--replace-media` was requested on a non-copy import."""
-
-    def __init__(self, dataset: str, mode: str) -> None:
-        self.dataset = dataset
-        self.mode = mode
-        super().__init__(f"--replace-media needs a 'copy' import; dataset {dataset!r} uses mode {mode!r}")
-
-
 class MissingBinaryError(StethoError):
     """A required external binary is not on PATH."""
 
