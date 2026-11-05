@@ -79,3 +79,67 @@ class MissingExtraError(StethoError):
         super().__init__(
             f"the {extra!r} extra is required; install it with `pip install stetho[{extra}]`",
         )
+
+
+class NeedsConversionError(DatasetError):
+    """The dataset's active audio layer is not in the required format."""
+
+    def __init__(self, dataset: str, required: str, current: str | None) -> None:
+        self.dataset = dataset
+        self.required = required
+        self.current = current
+        have = f"is {current!r}" if current else "has no converted layer"
+        super().__init__(f"dataset {dataset!r} {have}; run `convert --format {required}` first")
+
+
+class ReplaceMediaError(DatasetError):
+    """`--replace-media` was requested on a non-copy import."""
+
+    def __init__(self, dataset: str, mode: str) -> None:
+        self.dataset = dataset
+        self.mode = mode
+        super().__init__(f"--replace-media needs a 'copy' import; dataset {dataset!r} uses mode {mode!r}")
+
+
+class MissingBinaryError(StethoError):
+    """A required external binary is not on PATH."""
+
+    def __init__(self, binary: str) -> None:
+        self.binary = binary
+        super().__init__(f"the {binary!r} binary is required but was not found on PATH")
+
+
+class ProcessError(StethoError):
+    """Base class for process-related errors."""
+
+
+class DuplicateProcessError(ProcessError):
+    """Two process classes claim the same name."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        super().__init__(f"a process named {name!r} is already registered")
+
+
+class ProcessNotFoundError(ProcessError):
+    """No process is registered under the given name."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        super().__init__(f"no process registered under {name!r}")
+
+
+class ConversionError(ProcessError):
+    """An audio file could not be converted."""
+
+    def __init__(self, path: Path, detail: str) -> None:
+        self.path = path
+        super().__init__(f"could not convert {path}: {detail}")
+
+
+class ShardError(ProcessError):
+    """A `--shard i/n` spec is malformed."""
+
+    def __init__(self, spec: str) -> None:
+        self.spec = spec
+        super().__init__(f"invalid shard {spec!r}; expected i/n with 0 <= i < n")

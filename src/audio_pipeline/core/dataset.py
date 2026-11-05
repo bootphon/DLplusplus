@@ -15,7 +15,7 @@ from pathlib import Path
 import polars as pl
 
 from .config import DatasetFile
-from .errors import MissingAudioError
+from .errors import MissingAudioError, NeedsConversionError
 
 if t.TYPE_CHECKING:
     from .config import DatasetConfig
@@ -34,7 +34,13 @@ MANIFEST_SCHEMA = pl.Schema(
 )
 
 _MANIFEST = "manifest.parquet"
+_CONVERTED = "converted"
 _DATASET_TOML = "dataset.toml"
+
+
+def _suffix(file: AudioFile) -> str:
+    """A file's lowercase extension without the dot."""
+    return file.path.suffix.lstrip(".").lower()
 
 
 class AudioFile(t.NamedTuple):
@@ -71,11 +77,13 @@ class Dataset(abc.ABC):
         return pl.read_parquet(self.manifest_path)
 
     @abc.abstractmethod
-    def audio_files(self) -> t.Iterator[AudioFile]:
-        """Yield the audio files to process.
+    def audio_files(self, require: str | None = None) -> t.Iterator[AudioFile]:
+        """Yield the audio files to process, preferring the converted layer.
 
         Raises:
             MissingAudioError: If audio has not been extracted (video datasets).
+            NeedsConversionError: If `require` is set but the active layer is not
+                that format.
 
         """
 
@@ -84,10 +92,30 @@ class Dataset(abc.ABC):
 class AudioDataset(Dataset):
     """A dataset whose source files are already audio."""
 
-    def audio_files(self) -> t.Iterator[AudioFile]:
-        """Yield each source audio file from the manifest."""
+    def audio_files(self, require: str | None = None) -> t.Iterator[AudioFile]:
+        """Yield audio files, preferring the converted layer when present."""
+        converted = self.config.converted
+        if converted is not None:
+            if require is not None and converted.format != require:
+                raise NeedsConversionError(self.name, require, converted.format)
+            yield from self._layer_files(converted.format)
+            return
+        raw = list(self._raw_files())
+        if require is not None and not all(_suffix(f) == require for f in raw):
+            raise NeedsConversionError(self.name, require, None)
+        yield from raw
+
+    def _raw_files(self) -> t.Iterator[AudioFile]:
+        """Yield the raw source audio from the manifest."""
         for row in self.read_manifest().iter_rows(named=True):
             yield AudioFile(item_id=row["item_id"], path=Path(row["path"]))
+
+    def _layer_files(self, fmt: str) -> t.Iterator[AudioFile]:
+        """Yield the converted-layer file for each manifest item."""
+        base = self.workspace.dataset_dir(self.name) / _CONVERTED
+        for row in self.read_manifest().iter_rows(named=True):
+            item_id = row["item_id"]
+            yield AudioFile(item_id=item_id, path=base / f"{item_id}.{fmt}")
 
 
 @dataclass(frozen=True)
@@ -96,7 +124,7 @@ class VideoDataset(Dataset):
 
     required_processes: t.ClassVar[tuple[str, ...]] = ("extract_audio",)
 
-    def audio_files(self) -> t.Iterator[AudioFile]:
+    def audio_files(self, require: str | None = None) -> t.Iterator[AudioFile]:  # noqa: ARG002
         """Yield each extracted audio file.
 
         Raises:

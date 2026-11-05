@@ -88,6 +88,16 @@ class MetaConfig(pydantic.BaseModel):
     command_log: list[CommandLogEntry] = pydantic.Field(default_factory=list)
 
 
+class ConvertedLayer(pydantic.BaseModel):
+    """The active converted-audio layer produced by `audio_tools.convert`."""
+
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    format: str
+    sample_rate: int | None = None
+    mono: bool = False
+
+
 class DatasetConfig(pydantic.BaseModel):
     """Validated view of a dataset.toml."""
 
@@ -97,12 +107,13 @@ class DatasetConfig(pydantic.BaseModel):
     source: str
     mode: ImportMode
     runs: dict[str, str] = pydantic.Field(default_factory=dict)
+    converted: ConvertedLayer | None = None
 
 
 def _document_from_model(model: pydantic.BaseModel) -> tomlkit.TOMLDocument:
     """Render a validated model to a fresh TOML document."""
     doc = tomlkit.document()
-    for key, value in model.model_dump(mode="json").items():
+    for key, value in model.model_dump(mode="json", exclude_none=True).items():
         doc[key] = value
     return doc
 
@@ -212,4 +223,14 @@ class DatasetFile(TomlFile[DatasetConfig]):
             runs = tomlkit.table()
             self._doc["runs"] = runs
         runs[process] = run_id
+        self.config = self._validate()
+
+    def set_converted(self, layer: ConvertedLayer) -> None:
+        """Record the active converted-audio layer under the [converted] table."""
+        table = tomlkit.table()
+        table["format"] = layer.format
+        if layer.sample_rate is not None:
+            table["sample_rate"] = layer.sample_rate
+        table["mono"] = layer.mono
+        self._doc["converted"] = table
         self.config = self._validate()

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import abc
 import typing as t
 from dataclasses import dataclass
 
@@ -10,7 +9,6 @@ from .errors import WorkspaceExistsError, WorkspaceNotFoundError
 if t.TYPE_CHECKING:
     from pathlib import Path
 
-    from .dataset import Dataset
 
 Item = t.TypeVar("Item")
 _META = "meta.toml"
@@ -87,66 +85,3 @@ class Workspace:
     def meta(self) -> MetaFile:
         """Load this workspace's meta.toml."""
         return MetaFile.load(self.meta_file)
-
-
-class Process(abc.ABC):
-    """Metadata extraction step.
-
-    Wraps one external tool; declares dependencies by process name.
-
-    Raises:
-        UnsatisfiedDependencyError: If a dependency is not complete.
-
-    """
-
-    name: t.ClassVar[str]
-    dependencies: t.ClassVar[tuple[str, ...]] = ()
-
-    def __init__(self, workspace: Workspace, dataset: Dataset) -> None:
-        self.workspace = workspace
-        self.dataset = dataset
-
-    @abc.abstractmethod
-    def is_complete(self) -> bool: ...
-
-    @abc.abstractmethod
-    def run(self) -> None: ...
-
-
-class ItemProcess[Item](Process):
-    """Checkpointed process.
-
-    Iterates over self-defined work items and skips those already done.
-
-    Raises:
-        NotImplementedError: If a subclass omits an item hook.
-
-    """
-
-    @abc.abstractmethod
-    def items(self) -> t.Iterable[Item]: ...
-
-    @abc.abstractmethod
-    def is_done(self, item: Item) -> bool: ...
-
-    @abc.abstractmethod
-    def process_item(self, item: Item) -> None: ...
-
-    def run(self) -> None:
-        """Rune fn on each item?."""
-        for item in self.items():
-            if not self.is_done(item):
-                self.process_item(item)
-
-
-def missing_dependencies(process: Process, registry: dict[str, type[Process]]) -> list[str]:
-    """Find unsatisfied dependencies.
-
-    Instantiates each declared dependency on the same workspace and
-    dataset and checks whether its outputs are complete.
-
-    Raises:
-        KeyError: If a dependency name is not registered.
-
-    """
-    return [dep for dep in process.dependencies if not registry[dep](process.workspace, process.dataset).is_complete()]

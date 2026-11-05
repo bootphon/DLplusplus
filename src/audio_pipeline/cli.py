@@ -7,19 +7,19 @@ import sys
 import typing as t
 from pathlib import Path
 
-import rich.console
 from clypi import Command, Positional, arg
 
+from . import modules
+from .core.cli_common import ERR as _ERR
+from .core.cli_common import OUT as _OUT
 from .core.config import DatasetType  # noqa: TC001
 from .core.errors import StethoError
 from .core.importer import LocalMode, run_hf_import, run_import
 from .core.progress import resolve_disable
 from .core.workspace import Workspace
+from .modules.audio_tools.cli import Convert
 
 __all__ = ["main"]
-
-_OUT = rich.console.Console()
-_ERR = rich.console.Console(stderr=True)
 
 
 def _timestamp() -> str:
@@ -117,11 +117,18 @@ class ImportHF(Command):
         _OUT.print(f"[green]imported[/] {count} item(s) into {self.name!r}")
 
 
+class Process(Command):
+    """Local process runner."""
+
+    workspace: Positional[Path] = arg(inherited=True)
+    subcommand: Convert = arg()
+
+
 class Stetho(Command):
     """Orchestrate metadata extraction on audio/video datasets."""
 
     workspace: Positional[Path] = arg(help="path to the workspace root")
-    subcommand: Init | Import | ImportHF | None = None
+    subcommand: Init | Import | ImportHF | Process | None = None
 
     async def post_run_hook(self, exception: Exception | None) -> None:
         """Append a successful invocation to the workspace command log."""
