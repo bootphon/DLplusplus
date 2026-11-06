@@ -8,3 +8,4 @@ from __future__ import annotations
 import typing as t
 
 AudioFormat = t.Literal["wav", "flac", "ogg", "opus", "mp3"]
+MonoAlgorithm = t.Literal["average", "rms", "surround", "left", "right"]

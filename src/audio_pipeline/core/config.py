@@ -175,6 +175,18 @@ class MetaFile(TomlFile[MetaConfig]):
         """Build a new meta.toml document from a validated model."""
         return cls(path, _document_from_model(config))
 
+    def set_module_config(self, name: str, values: dict[str, t.Any]) -> None:
+        """Replace the [modules.<name>] block with `values`."""
+        modules = self._doc.get("modules")
+        if not isinstance(modules, tomlkit.items.Table):
+            modules = tomlkit.table(is_super_table=True)
+            self._doc["modules"] = modules
+        block = tomlkit.table()
+        for key, value in values.items():
+            block[key] = value
+        modules[name] = block
+        self.config = self._validate()
+
     @classmethod
     def create_default(
         cls,

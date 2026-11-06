@@ -9,17 +9,16 @@ from clypi import Positional, arg
 
 from audio_pipeline.core.cli_common import ProcessCommand, parse_shard
 
-from . import ConvertParams
-from .convert import Convert as ConvertProcess
-from .types import AudioFormat  # noqa: TC001
+from .convert import AudioConvert as AudioConvertProcess
+from .types import AudioFormat, MonoAlgorithm
 
 if t.TYPE_CHECKING:
     from audio_pipeline.core.dataset import Dataset
-    from audio_pipeline.core.process import Process
+    from audio_pipeline.core.process import Process, ProcessParams
     from audio_pipeline.core.workspace import Workspace
 
 
-class Convert(ProcessCommand):
+class AudioConvert(ProcessCommand):
     """Convert a dataset's audio (format, sample rate, channels)."""
 
     # Shared process params — re-declared because clypi does not inherit fields.
@@ -32,8 +31,22 @@ class Convert(ProcessCommand):
     format: AudioFormat = arg(default="wav", help="target audio format")
     sample_rate: int | None = arg(default=None, help="resample to this rate in Hz (default: keep source)")
     mono: bool = arg(default=False, help="downmix to a single channel")
+    mono_algorithm: MonoAlgorithm = arg(default="average", help="how to downmix: average, rms, surround, left, right")
 
-    def build_process(self, workspace: Workspace, dataset: Dataset) -> Process:
-        """Build the Convert process from this command's params."""
-        params = ConvertParams(format=self.format, sample_rate=self.sample_rate, mono=self.mono)
-        return ConvertProcess(workspace, dataset, params, parse_shard(self.shard))
+    def process_class(self) -> type[Process]:
+        """The convert process."""
+        return AudioConvertProcess
+
+    def param_overrides(self) -> dict[str, t.Any]:
+        """Only the params explicitly passed on the CLI (non-None)."""
+        given = {
+            "format": self.format,
+            "sample_rate": self.sample_rate,
+            "mono": self.mono,
+            "mono_algorithm": self.mono_algorithm,
+        }
+        return {key: value for key, value in given.items() if value is not None}
+
+    def build_process(self, workspace: Workspace, dataset: Dataset, params: ProcessParams) -> Process:
+        """Build the convert process from the resolved params."""
+        return AudioConvertProcess(workspace, dataset, params, parse_shard(self.shard))

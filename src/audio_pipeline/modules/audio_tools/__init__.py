@@ -1,5 +1,5 @@
 """Audio-file manipulation processes (conversion now; more later)."""
 
-from .convert import Convert, ConvertParams
+from .convert import AudioConvert, AudioConvertParams
 
-__all__ = ["Convert", "ConvertParams"]
+__all__ = ["AudioConvert", "AudioConvertParams"]

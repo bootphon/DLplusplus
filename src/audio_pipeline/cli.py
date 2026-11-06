@@ -18,7 +18,7 @@ from .core.errors import StethoError
 from .core.importer import LocalMode, run_hf_import, run_import
 from .core.progress import resolve_disable
 from .core.workspace import Workspace
-from .modules.audio_tools.cli import Convert
+from .modules.audio_tools.cli import AudioConvert
 
 __all__ = ["main"]
 
@@ -29,7 +29,7 @@ def _timestamp() -> str:
 
 
 class HidingFormatter(clypi.ClypiFormatter):
-    def format_help(
+    def format_help(  # noqa: PLR0917
         self,
         full_command,
         description,
@@ -160,7 +160,7 @@ class Process(Command):
     """Local process runner."""
 
     workspace: Positional[Path] = arg(inherited=True)
-    subcommand: Convert = arg()
+    subcommand: AudioConvert = arg()
 
 
 class Stetho(Command):
