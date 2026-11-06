@@ -2574,7 +2574,7 @@ requires-dist = [
     { name = "soundfile", specifier = ">=0.13" },
     { name = "ten-vad", marker = "extra == 'vad'", specifier = ">=1.0.6.8" },
     { name = "tomlkit", specifier = ">=0.13" },
-    { name = "vtc", marker = "extra == 'vtc'", git = "https://github.com/nhamilakis/VTC?rev=e8e819f781e4a25b1f24859d9af5d73f9e5e8df5" },
+    { name = "vtc", marker = "extra == 'vtc'", git = "https://github.com/LAAC-LSCP/VTC?rev=1e6901e180e63bf8793106fd9b8616de8af3fd61" },
     { name = "whisperx", marker = "extra == 'whisperx'", specifier = ">=3.1" },
 ]
 provides-extras = ["vtc", "whisperx", "vad", "snr", "esc", "hf"]
@@ -2939,7 +2939,7 @@ wheels = [
 [[package]]
 name = "vtc"
 version = "2.2.0"
-source = { git = "https://github.com/nhamilakis/VTC?rev=e8e819f781e4a25b1f24859d9af5d73f9e5e8df5#e8e819f781e4a25b1f24859d9af5d73f9e5e8df5" }
+source = { git = "https://github.com/LAAC-LSCP/VTC?rev=1e6901e180e63bf8793106fd9b8616de8af3fd61#1e6901e180e63bf8793106fd9b8616de8af3fd61" }
 dependencies = [
     { name = "huggingface-hub" },
     { name = "pyannote-audio" },

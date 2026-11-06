@@ -18,7 +18,10 @@ from .core.errors import StethoError
 from .core.importer import LocalMode, run_hf_import, run_import
 from .core.progress import resolve_disable
 from .core.workspace import Workspace
+
+# Tools & Processing modules
 from .modules.audio_tools.cli import AudioConvert
+from .modules.vtc.cli import Vtc
 
 __all__ = ["main"]
 
@@ -160,7 +163,7 @@ class Process(Command):
     """Local process runner."""
 
     workspace: Positional[Path] = arg(inherited=True)
-    subcommand: AudioConvert = arg()
+    subcommand: AudioConvert | Vtc = arg()
 
 
 class Stetho(Command):

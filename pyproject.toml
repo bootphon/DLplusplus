@@ -36,7 +36,7 @@ module-name = ["audio_pipeline"]
 
 [tool.uv.sources]
 brouhaha = { git = "https://github.com/marianne-m/brouhaha-vad", rev = "1e175a9dee0f4d7c618653d64796a45405a768e1" }
-vtc = { git = "https://github.com/nhamilakis/VTC", rev = "e8e819f781e4a25b1f24859d9af5d73f9e5e8df5" }
+vtc = { git = "https://github.com/LAAC-LSCP/VTC", rev = "1e6901e180e63bf8793106fd9b8616de8af3fd61" }
 
 [tool.uv]
 override-dependencies = [
@@ -114,6 +114,8 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = [
     "vtc.*",
+    "vtc_inference.*",
+    "segma.*",
     "brouhaha.*",
     "whisperx.*",
     "ten_vad.*",
