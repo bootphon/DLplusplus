@@ -35,6 +35,7 @@ class Convert(ItemProcess[AudioFile]):
     """Transcode each raw audio file into the dataset's converted layer."""
 
     name: t.ClassVar[str] = "convert"
+    required_binaries: t.ClassVar[tuple[str, ...]] = ("ffmpeg",)
     Params: t.ClassVar[type[ProcessParams]] = ConvertParams
 
     @property

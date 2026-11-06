@@ -20,8 +20,9 @@ import soundfile
 
 from .config import DatasetConfig, DatasetFile
 from .dataset import MANIFEST_SCHEMA
-from .errors import DatasetExistsError, NoMediaFoundError, ProbeError
+from .errors import DatasetExistsError, MissingBinaryError, NoMediaFoundError, ProbeError
 from .progress import track
+from .utils import require_binary
 
 if t.TYPE_CHECKING:
     from rich.console import Console
@@ -57,6 +58,7 @@ class Importer(t.Protocol):
 
     media_type: str
     extensions: frozenset[str]
+    binary: str | None
 
     def probe(self, path: Path) -> MediaInfo: ...  # noqa: D102
 
@@ -66,6 +68,7 @@ class AudioImporter:
 
     media_type = "audio"
     extensions = _AUDIO_EXT
+    binary: str | None
 
     def probe(self, path: Path) -> MediaInfo:
         """Probe an audio file.
@@ -86,6 +89,7 @@ class VideoImporter:
 
     media_type = "video"
     extensions = _VIDEO_EXT
+    binary: str | None = "ffprobe"
 
     def probe(self, path: Path) -> MediaInfo:
         """Probe a video file's duration via ffprobe.
@@ -107,6 +111,7 @@ def _probe_video_duration(path: Path) -> float:
     """Return a video's duration in seconds via ffprobe.
 
     Raises:
+        MissingBinaryError: If the ffprobe binary is not on PATH.
         ProbeError: If ffprobe is missing or returns no usable duration.
 
     """
@@ -122,15 +127,15 @@ def _probe_video_duration(path: Path) -> float:
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except FileNotFoundError as err:
+        raise MissingBinaryError("ffprobe") from err
+    except subprocess.CalledProcessError as err:
+        raise ProbeError(path, err.stderr.strip()) from err
+
+    try:
         return float(json.loads(result.stdout)["format"]["duration"])
-    except (
-        subprocess.CalledProcessError,
-        FileNotFoundError,
-        json.JSONDecodeError,
-        KeyError,
-        ValueError,
-    ) as err:
-        raise ProbeError(path) from err
+    except (json.JSONDecodeError, KeyError, ValueError) as err:
+        raise ProbeError(path, "ffprobe returned no duration") from err
 
 
 def _discover(source: Path, extensions: frozenset[str]) -> list[Path]:
@@ -207,12 +212,16 @@ def run_import(
         DatasetExistsError: If the dataset name already exists.
         NoMediaFoundError: If no matching media is found under source.
         ProbeError: If a media file cannot be probed.
+        MissingBinaryError: If ffprobe binary is missing when importing video dataset
 
     """
     registry_dir = workspace.registry_dir(name)
     if registry_dir.exists():
         raise DatasetExistsError(name)
     importer = _IMPORTERS[dataset_type]
+    if importer.binary is not None:
+        require_binary(importer.binary)
+
     files = _discover(source, importer.extensions)
     if not files:
         raise NoMediaFoundError(source, dataset_type)
@@ -247,6 +256,7 @@ def run_hf_import(
     files exactly like a local folder (discover → probe → copy → manifest).
 
     Raises:
+        MissingBinaryError: if 'ffprobe' is not installed when importing a video dataset
         MissingExtraError: If the `hf` extra (huggingface_hub) is not installed.
         DatasetExistsError: If the dataset name already exists.
         NoMediaFoundError: If the repo contains no audio files.
@@ -256,12 +266,17 @@ def run_hf_import(
     registry_dir = workspace.registry_dir(name)
     if registry_dir.exists():
         raise DatasetExistsError(name)
-    snapshot = Path(huggingface_hub.snapshot_download(repo_id, repo_type="dataset", revision=revision))
+
     importer = _IMPORTERS[dataset_type]
+    if importer.binary is not None:
+        require_binary(importer.binary)
+
+    snapshot = Path(huggingface_hub.snapshot_download(repo_id, repo_type="dataset", revision=revision))
     files = _discover(snapshot, importer.extensions)
     if not files:
         raise NoMediaFoundError(snapshot, "audio")
     registry_dir.mkdir(parents=True, exist_ok=True)
+
     rows = _build_rows(
         importer,
         files,
@@ -271,6 +286,7 @@ def run_hf_import(
         console=console,
         disable_progress=disable_progress,
     )
+
     config = DatasetConfig(type=dataset_type, source=repo_id, mode="huggingface")
     _finalize(workspace, name, rows, config)
     return len(rows)

@@ -15,6 +15,7 @@ import pydantic
 
 from .errors import DuplicateProcessError, ProcessNotFoundError
 from .progress import track
+from .utils import require_binary
 
 if t.TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -47,6 +48,7 @@ class Process(abc.ABC):
 
     name: t.ClassVar[str]
     dependencies: t.ClassVar[tuple[str, ...]] = ()
+    required_binaries: t.ClassVar[tuple[str, ...]] = ()
     Params: t.ClassVar[type[ProcessParams]] = ProcessParams
 
     def __init__(self, workspace: Workspace, dataset: Dataset, params: ProcessParams) -> None:
@@ -157,17 +159,30 @@ def registered_processes() -> dict[str, type[Process]]:
     return dict(_REGISTRY)
 
 
+def _require_binaries(process: Process) -> None:
+    """Preflight every external binary a process needs."""
+    for binary in process.required_binaries:
+        require_binary(binary)
+
+
 def run_local(process: Process, *, console: Console, disable_progress: bool = False) -> int:
     """Run a process locally, returning the number of items processed.
 
     Shows per-item progress for checkpointed (`ItemProcess`) processes and runs
     plain processes through their own `run()`.
+
+    Raises:
+        MissingBinaryError: If a binary the process requires is not on PATH.
+
     """
     if not isinstance(process, ItemProcess):
+        _require_binaries(process)
         process.run()
         return 0
     pending = list(process.pending_items())
+    if pending:
+        _require_binaries(process)
     for item in track(pending, description=process.name, console=console, total=len(pending), disable=disable_progress):
         process.process_item(item)
-    process._finish()
+    process._finish()  # noqa: SLF001
     return len(pending)

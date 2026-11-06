@@ -66,9 +66,13 @@ class NoMediaFoundError(DatasetError):
 class ProbeError(DatasetError):
     """A media file could not be probed."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, detail: str | None = None) -> None:
         self.path = path
-        super().__init__(f"could not probe media file {path}")
+        self.detail = detail
+        message = f"could not probe media file {path}"
+        if detail:
+            message += f": {detail}"
+        super().__init__(message)
 
 
 class MissingExtraError(StethoError):
