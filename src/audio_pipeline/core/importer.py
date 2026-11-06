@@ -235,12 +235,13 @@ def run_hf_import(
     workspace: Workspace,
     repo_id: str,
     name: str,
+    dataset_type: DatasetType,
     *,
     console: Console,
     disable_progress: bool = False,
     revision: str | None = None,
 ) -> int:
-    """Import a Hugging Face file-based audio dataset; return the item count.
+    """Import a Hugging Face file-based audio or video dataset; return the item count.
 
     Downloads the dataset repo with `snapshot_download`, then imports its audio
     files exactly like a local folder (discover → probe → copy → manifest).
@@ -256,7 +257,7 @@ def run_hf_import(
     if registry_dir.exists():
         raise DatasetExistsError(name)
     snapshot = Path(huggingface_hub.snapshot_download(repo_id, repo_type="dataset", revision=revision))
-    importer = _IMPORTERS["audio"]
+    importer = _IMPORTERS[dataset_type]
     files = _discover(snapshot, importer.extensions)
     if not files:
         raise NoMediaFoundError(snapshot, "audio")
@@ -270,6 +271,6 @@ def run_hf_import(
         console=console,
         disable_progress=disable_progress,
     )
-    config = DatasetConfig(type="audio", source=repo_id, mode="huggingface")
+    config = DatasetConfig(type=dataset_type, source=repo_id, mode="huggingface")
     _finalize(workspace, name, rows, config)
     return len(rows)

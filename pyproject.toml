@@ -86,6 +86,7 @@ ignore = [
     "D105",    # no docstring in __post_init__
     "S603",    # subcommand cmd validation (rule is bad and does not really check anything)
     "TC003",   # TypeChecking block, detection does not work that well
+    "TC001",
     "PLR0913", # Argument limit on functions, does not seem necessairy and leads to verbose alternatives
     "TRY003",  # This is too strict on error messages (especially on a cli, were explanation of error is important)
     "EM102",   # This is annoying when using explicit errors

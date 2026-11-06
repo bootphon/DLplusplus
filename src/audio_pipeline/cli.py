@@ -9,10 +9,9 @@ from pathlib import Path
 
 from clypi import Command, Positional, arg
 
-from . import modules
 from .core.cli_common import ERR as _ERR
 from .core.cli_common import OUT as _OUT
-from .core.config import DatasetType  # noqa: TC001
+from .core.config import DatasetType
 from .core.errors import StethoError
 from .core.importer import LocalMode, run_hf_import, run_import
 from .core.progress import resolve_disable
@@ -52,7 +51,7 @@ class Import(Command):
     source: Positional[Path] = arg(help="folder of media to import")
     workspace: Positional[Path] = arg(inherited=True)
     name: str = arg(help="dataset name")
-    type: DatasetType = arg(help="dataset media type")
+    type: DatasetType = arg(default="audio", help="dataset media type")
     mode: LocalMode = arg(default="symlink", help="copy, symlink, or reference")
     no_progress: bool = arg(default=False, help="disable the progress display (also via STETHO_PROGRESS=0)")
 
@@ -79,7 +78,7 @@ class Import(Command):
 
 
 class ImportHF(Command):
-    """Import a Hugging Face audio dataset."""
+    """Import a Hugging Face audio or video dataset."""
 
     # clypi derives the command name from the class name via `_camel_to_dashed`,
     # which would turn `ImportHF` into `import-h-f`. `prog()`
@@ -92,6 +91,7 @@ class ImportHF(Command):
     repo: Positional[str] = arg(help="Hugging Face dataset repo id")
     workspace: Positional[Path] = arg(inherited=True)
     name: str = arg(help="dataset name")
+    type: DatasetType = arg(default="audio", help="dataset media type")
     revision: str | None = arg(default=None, help="git revision (branch, tag, or commit)")
     no_progress: bool = arg(default=False, help="disable the progress display (also via STETHO_PROGRESS=0)")
 
@@ -110,6 +110,7 @@ class ImportHF(Command):
             Workspace.open(self.workspace),
             self.repo,
             self.name,
+            dataset_type=self.type,
             revision=self.revision,
             console=_OUT,
             disable_progress=resolve_disable(no_progress_flag=self.no_progress),
