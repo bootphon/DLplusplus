@@ -7,13 +7,17 @@ from dataclasses import dataclass
 
 from .config import MetaFile
 from .errors import WorkspaceExistsError, WorkspaceNotFoundError
+from .process import registered_processes
 
 if t.TYPE_CHECKING:
     from pathlib import Path
 
+    from .process import ProcessParams
+
 
 Item = t.TypeVar("Item")
 _META = "meta.toml"
+_COMMAND_LOG = "commands.jsonl"
 _MANIFEST = "manifest.parquet"
 _DATASET_TOML = "dataset.toml"
 _REGISTRY = "registry"
@@ -22,6 +26,11 @@ _AUDIO = "audio"
 _RUNS = "runs"
 _ANNOTATIONS = "annotations"
 _PLOTS = "plots"
+
+
+def _process_params() -> dict[str, type[ProcessParams]]:
+    """Map each registered process name to its parameters model."""
+    return {name: cls.Params for name, cls in registered_processes().items()}
 
 
 @dataclass(frozen=True)
@@ -40,6 +49,11 @@ class Workspace:
     def meta_file(self) -> Path:
         """Path to the meta.toml file."""
         return self.root / _META
+
+    @property
+    def command_log_file(self) -> Path:
+        """Path to the append-only command log (JSON Lines)."""
+        return self.root / _COMMAND_LOG
 
     def registry_dir(self, dataset: str) -> Path:
         """Path to a dataset's registry entry (dataset.toml + manifest)."""
@@ -86,7 +100,7 @@ class Workspace:
             raise WorkspaceExistsError(ws.root)
         for sub in (_REGISTRY, _SOURCE, _RUNS, _ANNOTATIONS, _PLOTS):
             (ws.root / sub).mkdir(parents=True, exist_ok=True)
-        MetaFile.create_default(ws.meta_file).save()
+        MetaFile.create_default(ws.meta_file, _process_params()).save()
         return ws
 
     @classmethod
@@ -107,3 +121,16 @@ class Workspace:
     def meta(self) -> MetaFile:
         """Load this workspace's meta.toml."""
         return MetaFile.load(self.meta_file)
+
+    def reset_meta(self) -> None:
+        """Overwrite meta.toml with a fresh default, re-scaffolding process blocks.
+
+        Discards the current meta.toml contents (settings and command log).
+
+        Raises:
+            WorkspaceNotFoundError: If this workspace has no meta.toml.
+
+        """
+        if not self.meta_file.exists():
+            raise WorkspaceNotFoundError(self.root)
+        MetaFile.create_default(self.meta_file, _process_params()).save()

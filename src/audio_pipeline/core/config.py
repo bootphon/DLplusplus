@@ -43,11 +43,9 @@ log_level = "INFO"
 # Dataset source registry (reserved).
 [sources]
 
-# Per-module configuration. Each [modules.<name>] block is opaque to
-# stetho core and validated by the owning module.
-[modules]
-
-# Command history is appended automatically as [[command_log]] entries.
+# Per-module configuration. Each [modules.<name>] block below lists a process's
+# parameters, commented at their defaults — uncomment to override. Blocks are
+# opaque to stetho core and validated by the owning module.
 """
 
 
@@ -58,15 +56,6 @@ class ConfigError(StethoError):
         self.path = path
         self.error = error
         super().__init__(f"invalid config at {path}:\n{error}")
-
-
-class CommandLogEntry(pydantic.BaseModel):
-    """One recorded CLI invocation."""
-
-    model_config = pydantic.ConfigDict(extra="forbid")
-
-    timestamp: str
-    argv: list[str]
 
 
 class MetaConfig(pydantic.BaseModel):
@@ -85,7 +74,6 @@ class MetaConfig(pydantic.BaseModel):
     slurm: dict[str, t.Any] = pydantic.Field(default_factory=dict)
     sources: dict[str, t.Any] = pydantic.Field(default_factory=dict)
     modules: dict[str, dict[str, t.Any]] = pydantic.Field(default_factory=dict)
-    command_log: list[CommandLogEntry] = pydantic.Field(default_factory=list)
 
 
 class ConvertedLayer(pydantic.BaseModel):
@@ -116,6 +104,19 @@ def _document_from_model(model: pydantic.BaseModel) -> tomlkit.TOMLDocument:
     for key, value in model.model_dump(mode="json", exclude_none=True).items():
         doc[key] = value
     return doc
+
+
+def _render_module_block(name: str, params: type[pydantic.BaseModel]) -> str:
+    """Render a commented `[modules.<name>]` block listing a model's fields at defaults."""
+    lines = [f"[modules.{name}]"]
+    for field_name, field in params.model_fields.items():
+        if field.description:
+            lines.append(f"# {field.description}")
+        default = None if field.is_required() else field.default
+        value = "" if default is None else tomlkit.item(default).as_string()
+        suffix = f" {value}" if value else ""
+        lines.append(f"# {field_name} ={suffix}")
+    return "\n".join(lines) + "\n"
 
 
 class TomlFile[ModelT](abc.ABC):
@@ -174,22 +175,22 @@ class MetaFile(TomlFile[MetaConfig]):
         """Build a new meta.toml document from a validated model."""
         return cls(path, _document_from_model(config))
 
-    def log_command(self, timestamp: str, argv: list[str]) -> None:
-        """Append a command-log entry as a [[command_log]] table."""
-        entry = tomlkit.table()
-        entry["timestamp"] = timestamp
-        entry["argv"] = argv
-        log = self._doc.get("command_log")
-        if not isinstance(log, tomlkit.items.AoT):
-            log = tomlkit.aot()
-            self._doc["command_log"] = log
-        log.append(entry)
-        self.config = self._validate()
-
     @classmethod
-    def create_default(cls, path: Path) -> MetaFile:
-        """Build a new meta.toml from the commented starter template."""
-        return cls(path, tomlkit.parse(_META_TEMPLATE))
+    def create_default(
+        cls,
+        path: Path,
+        module_params: t.Mapping[str, type[pydantic.BaseModel]] | None = None,
+    ) -> MetaFile:
+        """Build a new meta.toml from the commented starter template.
+
+        When `module_params` is given, append a commented `[modules.<name>]` block
+        for each process, listing its parameters at their default values.
+        """
+        text = _META_TEMPLATE
+        if module_params:
+            blocks = "\n".join(_render_module_block(n, m) for n, m in sorted(module_params.items()))
+            text = f"{text}\n{blocks}"
+        return cls(path, tomlkit.parse(text))
 
 
 class DatasetFile(TomlFile[DatasetConfig]):

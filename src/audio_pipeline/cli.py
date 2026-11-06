@@ -7,10 +7,12 @@ import sys
 import typing as t
 from pathlib import Path
 
+import clypi
 from clypi import Command, Positional, arg
 
 from .core.cli_common import ERR as _ERR
 from .core.cli_common import OUT as _OUT
+from .core.command_log import append_command
 from .core.config import DatasetType
 from .core.errors import StethoError
 from .core.importer import LocalMode, run_hf_import, run_import
@@ -24,6 +26,24 @@ __all__ = ["main"]
 def _timestamp() -> str:
     """Current UTC time, ISO-8601 to the second."""
     return dt.datetime.now(tz=dt.UTC).isoformat(timespec="seconds")
+
+
+class HidingFormatter(clypi.ClypiFormatter):
+    def format_help(
+        self,
+        full_command,
+        description,
+        epilog,
+        options,
+        positionals,
+        subcommands,
+        exception,
+    ) -> str:
+        visible = [s for s in subcommands if not getattr(s, "_hidden", False)]
+        return super().format_help(full_command, description, epilog, options, positionals, visible, exception)
+
+
+clypi.configure(clypi.ClypiConfig(help_formatter=HidingFormatter()))
 
 
 class Init(Command):
@@ -40,6 +60,24 @@ class Init(Command):
         """
         ws = Workspace.init(self.workspace)
         _OUT.print(f"[green]initialised workspace[/] {ws.root}")
+
+
+class ResetMeta(Command):
+    """Regenerate meta.toml from defaults (discards settings and command log)."""
+
+    workspace: Positional[Path] = arg(inherited=True)
+    _hidden = True
+
+    async def run(self) -> None:
+        """Overwrite meta.toml with a fresh default.
+
+        Raises:
+            WorkspaceNotFoundError: If the workspace is not initialised.
+
+        """
+        ws = Workspace(self.workspace)
+        ws.reset_meta()
+        _OUT.print(f"[green]reset[/] meta.toml at {ws.meta_file}")
 
 
 class Import(Command):
@@ -129,15 +167,13 @@ class Stetho(Command):
     """Orchestrate metadata extraction on audio/video datasets."""
 
     workspace: Positional[Path] = arg(help="path to the workspace root")
-    subcommand: Init | Import | ImportHF | Process | None = None
+    subcommand: Init | ResetMeta | Import | ImportHF | Process | None = None
 
     async def post_run_hook(self, exception: Exception | None) -> None:
-        """Append a successful invocation to the workspace command log."""
+        """Record a successful invocation in the workspace command log."""
         if exception is not None or self.subcommand is None:
             return
-        meta = Workspace(self.workspace).meta()
-        meta.log_command(_timestamp(), sys.argv[1:])
-        meta.save()
+        append_command(Workspace(self.workspace).command_log_file, _timestamp(), sys.argv[1:])
 
 
 def _abort(err: StethoError) -> t.NoReturn:

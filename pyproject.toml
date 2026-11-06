@@ -84,6 +84,7 @@ ignore = [
     "TD003",   # no issue link required on TODOs
     "D107",    # no docstring in init
     "D105",    # no docstring in __post_init__
+    "ANN001",  # no type on 'cls'
     "S603",    # subcommand cmd validation (rule is bad and does not really check anything)
     "TC003",   # TypeChecking block, detection does not work that well
     "TC001",
